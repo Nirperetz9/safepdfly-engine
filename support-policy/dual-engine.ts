@@ -21,21 +21,29 @@ import type { ClassifyReport } from "../classify-mupdf/classifier.js";
 import type { SupportReasonCode } from "./reasons.js";
 
 /**
- * Geometry both engines agreed on. visibleBox is in the PDF.js canonical
+ * Page evidence both engines agreed on. visibleBox is in the PDF.js canonical
  * frame (y-up, unrotated, unscaled) — the frame the render pipeline uses.
+ * The content evidence is dual-engine-agreed (T036 enforces text-presence
+ * agreement) and feeds the scanned/hybrid policy (T037).
  */
-export interface AgreedPageGeometry {
+export interface AgreedPage {
   readonly pageIndex: number;
   readonly visibleBox: readonly [number, number, number, number];
   readonly rotation: number;
   readonly userUnit: number;
+  /** Agreed text presence (both engines saw the same). */
+  readonly hasText: boolean;
+  /** Raster image blocks (MuPDF structured text). */
+  readonly imageBlocks: number;
+  /** Fraction of the visible page covered by raster images, 0..1. */
+  readonly imageCoverage: number;
 }
 
 export type EngineComparison =
   | {
       readonly ok: true;
       readonly pageCount: number;
-      readonly pages: readonly AgreedPageGeometry[];
+      readonly pages: readonly AgreedPage[];
     }
   | { readonly ok: false; readonly reason: Extract<SupportReasonCode, "disagreement"> };
 
@@ -58,7 +66,7 @@ function closeEnough(a: number, b: number): boolean {
   return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= GEOMETRY_EPSILON_PT;
 }
 
-function freezeAgreed(p: AgreedPageGeometry): AgreedPageGeometry {
+function freezeAgreed(p: AgreedPage): AgreedPage {
   return Object.freeze({
     ...p,
     visibleBox: Object.freeze([...p.visibleBox]) as readonly [number, number, number, number],
@@ -80,7 +88,7 @@ export function compareEngines(
     if (!Array.isArray(report.pages) || report.pages.length !== report.pageCount) {
       return disagree();
     }
-    const pages: AgreedPageGeometry[] = [];
+    const pages: AgreedPage[] = [];
     for (let i = 0; i < descriptors.length; i++) {
       const d = descriptors[i]!;
       const e = report.pages[i]!;
@@ -114,6 +122,15 @@ export function compareEngines(
       const jsHasText = d.classification === "text_based";
       const muHasText = e.textChars > 0;
       if (jsHasText !== muHasText) return disagree();
+      if (
+        !Number.isInteger(e.imageBlocks) ||
+        e.imageBlocks < 0 ||
+        !Number.isFinite(e.imageCoverage) ||
+        e.imageCoverage < 0 ||
+        e.imageCoverage > 1
+      ) {
+        return disagree();
+      }
 
       pages.push(
         freezeAgreed({
@@ -121,6 +138,9 @@ export function compareEngines(
           visibleBox: d.context.cropBox,
           rotation: d.context.rotation,
           userUnit: d.context.userUnit,
+          hasText: jsHasText,
+          imageBlocks: e.imageBlocks,
+          imageCoverage: e.imageCoverage,
         }),
       );
     }

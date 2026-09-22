@@ -28,6 +28,8 @@ export interface ClassifyPageEvidence {
   textChars: number;
   /** Image blocks seen via structured text. */
   imageBlocks: number;
+  /** Fraction of the visible page area covered by raster images (0..1). */
+  imageCoverage: number;
 }
 
 export interface ClassifyReport {
@@ -119,7 +121,7 @@ export async function classifySource(
     let pageEvidence: ClassifyPageEvidence;
     try {
       const page = doc.page(i);
-      const { chars, imageBlocks } = page.textEvidence();
+      const { chars, imageBlocks, imageCoverage } = page.contentEvidence();
       pageEvidence = {
         pageIndex: i,
         mediaBox: page.getMediaBox(),
@@ -128,6 +130,7 @@ export async function classifySource(
         userUnit: page.userUnit(),
         textChars: chars,
         imageBlocks,
+        imageCoverage,
       };
     } catch {
       throw new ClassifyError("corrupt");

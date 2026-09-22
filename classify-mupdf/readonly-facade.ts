@@ -25,8 +25,12 @@ export interface ReadOnlyPage {
   rotation(): number;
   /** /UserUnit, defaulting to 1. */
   userUnit(): number;
-  /** Text/image evidence from structured text (walker, no content kept). */
-  textEvidence(): { chars: number; imageBlocks: number };
+  /**
+   * Content evidence from structured text (walker, no content kept).
+   * imageCoverage is the fraction of the visible page area covered by
+   * raster image blocks (0..1) — the scanned/hybrid signal (T037).
+   */
+  contentEvidence(): { chars: number; imageBlocks: number; imageCoverage: number };
 }
 
 export interface ReadOnlyDocument {
@@ -69,7 +73,7 @@ export function openDocumentReadOnly(data: ArrayBuffer): ReadOnlyDocument {
         toStructuredText(options: string): {
           walk(walker: {
             onChar?: () => void;
-            onImageBlock?: () => void;
+            onImageBlock?: (bbox: [number, number, number, number]) => void;
           }): void;
         };
       };
@@ -92,18 +96,27 @@ export function openDocumentReadOnly(data: ArrayBuffer): ReadOnlyDocument {
           const n = toNumberOr(v, 1);
           return n > 0 ? n : 1;
         },
-        textEvidence(): { chars: number; imageBlocks: number } {
+        contentEvidence(): { chars: number; imageBlocks: number; imageCoverage: number } {
           let chars = 0;
           let imageBlocks = 0;
-          raw.toStructuredText("").walk({
+          let imageArea = 0;
+          // "preserve-images" is required for the stext device to emit
+          // image blocks (verified against the mupdf-wasm option strings).
+          raw.toStructuredText("preserve-images").walk({
             onChar: () => {
               chars++;
             },
-            onImageBlock: () => {
+            onImageBlock: (bbox: [number, number, number, number]) => {
               imageBlocks++;
+              imageArea += Math.max(0, bbox[2] - bbox[0]) * Math.max(0, bbox[3] - bbox[1]);
             },
           });
-          return { chars, imageBlocks };
+          const crop = raw.getBounds("CropBox");
+          const pageArea =
+            Math.max(0, crop[2] - crop[0]) * Math.max(0, crop[3] - crop[1]);
+          const imageCoverage =
+            pageArea > 0 ? Math.min(1, imageArea / pageArea) : 0;
+          return { chars, imageBlocks, imageCoverage };
         },
       };
     },
