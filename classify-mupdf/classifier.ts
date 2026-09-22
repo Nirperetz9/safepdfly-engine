@@ -8,7 +8,9 @@
  * layer.
  *
  * Resource budgets are enforced by the orchestrator (T036/T040) before this
- * classifier runs; the classifier itself only reports what it sees.
+ * classifier runs; the classifier itself only reports what it sees, except
+ * for the page-count early guard (T040) that prevents walking a pathological
+ * page tree.
  */
 import type {
   DocumentFeatures,
@@ -16,6 +18,7 @@ import type {
   PageMarkupEvidence,
   ReadOnlyDocument,
 } from "./readonly-facade.js";
+import { checkPageCount } from "../support-policy/budgets.js";
 
 export interface ClassifyPageEvidence {
   pageIndex: number;
@@ -35,6 +38,12 @@ export interface ClassifyPageEvidence {
   imageCoverage: number;
   /** Annotation / optional-content evidence for the T086 boundary check. */
   markup: PageMarkupEvidence;
+  /**
+   * T040 — Largest single image XObject on the page, in decoded pixels
+   * (/Width × /Height from the image dictionary; no decoding). The
+   * support-policy layer adjudicates it against the render-surface budget.
+   */
+  maxImagePixels: number;
 }
 
 export interface ClassifyReport {
@@ -53,7 +62,8 @@ export type ClassifyFailureCode =
   | "not-a-pdf"
   | "encrypted"
   | "corrupt"
-  | "empty";
+  | "empty"
+  | "over-limit";
 
 export class ClassifyError extends Error {
   readonly code: ClassifyFailureCode;
@@ -155,6 +165,12 @@ export async function classifySource(
     }
     throw new ClassifyError("empty");
   }
+  // T040 — page-count early guard: never walk a pathological page tree.
+  // (A verdict on dimensions/images belongs to the support-policy layer,
+  // which reads the evidence collected below.)
+  if (checkPageCount(pageCount) !== null) {
+    throw new ClassifyError("over-limit");
+  }
 
   const pages: ClassifyPageEvidence[] = [];
   for (let i = 0; i < pageCount; i++) {
@@ -172,6 +188,7 @@ export async function classifySource(
         imageBlocks,
         imageCoverage,
         markup: page.markupEvidence(),
+        maxImagePixels: page.maxImagePixels(),
       };
     } catch {
       throw new ClassifyError("corrupt");

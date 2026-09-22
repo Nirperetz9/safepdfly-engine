@@ -14,7 +14,12 @@
  */
 import { Brand } from "../geometry/index.js";
 import type { PageDescriptor, PageClassification } from "../model.js";
-import { BUDGET_POLICY } from "../support-policy/budgets.js";
+import {
+  BUDGET_POLICY,
+  BudgetExceededError,
+  checkOperatorCount,
+  checkPhysicalDimensions,
+} from "../support-policy/budgets.js";
 import type { InputEngineDoc } from "./engine.js";
 
 /** Internal only. Never crosses the worker boundary. */
@@ -97,6 +102,17 @@ export async function extractDescriptors(
     ) {
       throw new DescriptorError("degenerate page box", n);
     }
+    // T040 — budget gates, fail-fast inside the worker. Dimensions use the
+    // visible box (the only box PDF.js exposes on the main thread); the
+    // classifier derives the authoritative MediaBox and the policy layer
+    // re-checks physical dimensions on that evidence.
+    const dimKind = checkPhysicalDimensions(
+      (x1 - x0) * userUnit,
+      (y1 - y0) * userUnit,
+    );
+    if (dimKind !== null) throw new BudgetExceededError(dimKind, n);
+    const opKind = checkOperatorCount(await page.countOperators());
+    if (opKind !== null) throw new BudgetExceededError(opKind, n);
     const hasText = await page.hasNonWhitespaceText();
     out.push(
       Object.freeze({

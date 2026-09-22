@@ -9,6 +9,12 @@
 import type { InputEngine } from "./engine.js";
 import { DescriptorError, extractDescriptors } from "./descriptors.js";
 import {
+  BudgetExceededError,
+  checkInputSize,
+  checkPageCount,
+  limitLabel,
+} from "../support-policy/budgets.js";
+import {
   INPUT_POLICY_VERSION,
   type InputWorkerResponse,
   type OpenSourceRequest,
@@ -34,12 +40,15 @@ function rejected(
   reasonCode: SupportReasonCode,
   outcome: "rejected" | "indeterminate" = "rejected",
   pageNumbers: readonly number[] = [],
+  limitLabelValue?: string,
 ): SourceRejected {
   return Object.freeze({
     type: "SOURCE_REJECTED",
     outcome,
     reasonCode,
     pageNumbers: Object.freeze([...pageNumbers]),
+    // Present only for over-limit: the policy-derived {limitLabel} value.
+    ...(limitLabelValue !== undefined ? { limitLabel: limitLabelValue } : {}),
   }) as SourceRejected;
 }
 
@@ -54,6 +63,14 @@ function mapEngineError(error: unknown): SourceRejected {
       ? (error as { name?: unknown }).name
       : undefined;
   if (name === "PasswordException") return rejected("locked");
+  if (error instanceof BudgetExceededError) {
+    return rejected(
+      "over-limit",
+      "rejected",
+      error.pageNumber === undefined ? [] : [error.pageNumber],
+      limitLabel(error.kind),
+    );
+  }
   if (error instanceof DescriptorError) {
     return rejected(
       "damaged",
@@ -83,12 +100,22 @@ export async function handleOpenSource(
   if (!(bytes instanceof ArrayBuffer) || !isPdfBytes(bytes)) {
     return rejected("wrong-type");
   }
+  // T040 — input-size gate before the engine touches the bytes.
+  const sizeKind = checkInputSize(bytes.byteLength);
+  if (sizeKind !== null) {
+    return rejected("over-limit", "rejected", [], limitLabel(sizeKind));
+  }
   const { engine } = options;
   const randomId = options.randomId ?? (() => crypto.randomUUID());
   let doc: Awaited<ReturnType<InputEngine["open"]>> | undefined;
   try {
     doc = await engine.open(new Uint8Array(bytes));
     if (doc.numPages === 0) return rejected("empty");
+    // T040 — page-count gate before per-page extraction.
+    const countKind = checkPageCount(doc.numPages);
+    if (countKind !== null) {
+      return rejected("over-limit", "rejected", [], limitLabel(countKind));
+    }
     const descriptors = await extractDescriptors(doc);
     return Object.freeze({
       type: "SOURCE_READY",

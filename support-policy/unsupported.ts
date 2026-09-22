@@ -38,6 +38,8 @@ export function mapClassifyFailure(
       return "damaged";
     case "empty":
       return "empty";
+    case "over-limit":
+      return "over-limit";
     default:
       return "unexpected";
   }

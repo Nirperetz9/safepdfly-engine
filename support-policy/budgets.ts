@@ -61,3 +61,113 @@ export function limitLabel(kind: BudgetKind): string {
       return "2,000,000 operators";
   }
 }
+
+/**
+ * T040 — Pure budget checks. Each returns the breached {@link BudgetKind},
+ * or `null` when the value is within budget. Boundary values are accepted
+ * (a value exactly at the limit is within budget); anything above breaches.
+ *
+ * Provenance of the numbers (see the header comment): `input-size`,
+ * `page-count`, `render-surface`, and `page-dimension` are published Plan
+ * limits. `operators` is the T033 engineering fail-closed guard (2,000,000
+ * per page) — not a Plan-published limit; it is enforced as a worker-level
+ * safety guard and reported through the same `over-limit` channel with the
+ * policy-derived label, never as a product promise in UX copy.
+ */
+export function checkInputSize(byteLength: number): BudgetKind | null {
+  return byteLength > BUDGET_POLICY.maxInputBytes ? "input-size" : null;
+}
+
+export function checkPageCount(pageCount: number): BudgetKind | null {
+  return pageCount > BUDGET_POLICY.maxPages ? "page-count" : null;
+}
+
+/**
+ * Physical page dimensions in points, already multiplied by UserUnit.
+ * Either dimension above the limit breaches.
+ */
+export function checkPhysicalDimensions(
+  widthPt: number,
+  heightPt: number,
+): BudgetKind | null {
+  return widthPt > BUDGET_POLICY.maxPageDimensionPt ||
+    heightPt > BUDGET_POLICY.maxPageDimensionPt
+    ? "page-dimension"
+    : null;
+}
+
+/** Decoded pixels of a single image XObject (the atomic decode unit). */
+export function checkDecodedImagePixels(pixels: number): BudgetKind | null {
+  return pixels > BUDGET_POLICY.maxRenderPixels ? "render-surface" : null;
+}
+
+/** Content-stream operator count of a single page. */
+export function checkOperatorCount(operators: number): BudgetKind | null {
+  return operators > BUDGET_POLICY.maxOperatorsPerPage ? "operators" : null;
+}
+
+/** Physical page evidence used by the policy-level budget check. */
+export interface ClassifiedPageBudgets {
+  /** 1-based page number, for safe numeric context. */
+  readonly pageNumber: number;
+  /** MediaBox width × UserUnit, in points (authoritative physical size). */
+  readonly mediaWidthPt: number;
+  /** MediaBox height × UserUnit, in points. */
+  readonly mediaHeightPt: number;
+  /** Largest single image XObject on the page, in decoded pixels. */
+  readonly maxImagePixels: number;
+}
+
+/**
+ * Policy-level budget verdict for one classified page. Dimension is checked
+ * first (cheap, most likely to fire on pathological input), then decoded
+ * image pixels. Returns the breached kind and page number, or `null` when
+ * the page is within budget. Verdicts belong here — the classifier only
+ * collects the evidence.
+ */
+export function checkClassifiedPageBudgets(
+  page: ClassifiedPageBudgets,
+): { readonly kind: BudgetKind; readonly pageNumber: number } | null {
+  const dimKind = checkPhysicalDimensions(
+    page.mediaWidthPt,
+    page.mediaHeightPt,
+  );
+  if (dimKind !== null) return { kind: dimKind, pageNumber: page.pageNumber };
+  const imgKind = checkDecodedImagePixels(page.maxImagePixels);
+  if (imgKind !== null) return { kind: imgKind, pageNumber: page.pageNumber };
+  return null;
+}
+
+/**
+ * T040 — Thrown inside the input worker when a budget check fires on a
+ * page. Carries only the breached kind and the 1-based page number — no
+ * document content. The handler maps it to `SOURCE_REJECTED` with
+ * reason `over-limit` and the policy-derived `{limitLabel}`.
+ */
+export class BudgetExceededError extends Error {
+  readonly kind: BudgetKind;
+  readonly pageNumber?: number;
+
+  constructor(kind: BudgetKind, pageNumber?: number) {
+    super(`budget exceeded: ${kind}`);
+    this.name = "BudgetExceededError";
+    this.kind = kind;
+    if (pageNumber !== undefined) this.pageNumber = pageNumber;
+  }
+}
+
+/**
+ * T040 — Time and memory enforcement notes.
+ *
+ * Time: enforced by the single-use worker clients with monotonic clocks —
+ * `InputWorkerClient` (default 60 s per open) and the classifier client
+ * (`CLASSIFICATION_TIMEOUT_MS`, 30 s). A hung or pathological engine run
+ * rejects as a timeout; the worker is terminated and never reused.
+ *
+ * Memory: the 512 MiB peak is an engineering design target, not a
+ * browser-enforceable hard cap. It is held structurally: the 25 MiB input
+ * gate bounds the largest single allocation the pipeline accepts, the two
+ * engines run sequentially (never two document contexts alive), each worker
+ * is single-use and terminated after its operation, and the render surface
+ * is capped at 16 MP per page/tile (enforced at render time, Phase 4).
+ */

@@ -38,6 +38,12 @@ export interface ReadOnlyPage {
    * (unrotated, y-up) — the canonical frame selections use.
    */
   markupEvidence(): PageMarkupEvidence;
+  /**
+   * T040 — Largest single image XObject on the page, in decoded pixels
+   * (/Width × /Height from the image dictionary; nothing is decoded).
+   * 0 when the page has no image XObjects.
+   */
+  maxImagePixels(): number;
 }
 
 /**
@@ -179,6 +185,35 @@ function xobjectUsesOC(xobjects: StructObj, depth: number): boolean {
     }
   });
   return found;
+}
+
+/**
+ * T040 — Largest single image XObject in an XObject name tree (or nested
+ * Form XObject resources, depth ≤ 2), in decoded pixels (/Width × /Height
+ * from the image dictionary). Dictionary reads only — nothing is decoded.
+ * Throws on walk errors so the caller can fail closed.
+ */
+function maxImagePixelsIn(xobjects: StructObj, depth: number): number {
+  if (depth > 2) return 0;
+  let max = 0;
+  xobjects.forEach((val) => {
+    const subtypeObj = val.get("Subtype");
+    const subtype = subtypeObj.isNull() ? "" : String(subtypeObj.valueOf());
+    if (subtype === "Image") {
+      const w = toNumberOr(val.get("Width").valueOf(), 0);
+      const h = toNumberOr(val.get("Height").valueOf(), 0);
+      if (w > 0 && h > 0) max = Math.max(max, w * h);
+    } else if (subtype === "Form") {
+      const resources = val.get("Resources");
+      if (!resources.isNull()) {
+        const nested = resources.get("XObject");
+        if (!nested.isNull()) {
+          max = Math.max(max, maxImagePixelsIn(nested, depth + 1));
+        }
+      }
+    }
+  });
+  return max;
 }
 
 export function openDocumentReadOnly(data: ArrayBuffer): ReadOnlyDocument {
@@ -410,6 +445,16 @@ export function openDocumentReadOnly(data: ArrayBuffer): ReadOnlyDocument {
             annotationsIndeterminate,
             optionalContent,
           });
+        },
+        maxImagePixels(): number {
+          // Dictionary reads only — the image stream is never decoded.
+          // Any walk failure throws so the classifier fails closed.
+          const pageObj = raw.getObject();
+          const resources = pageObj.getInheritable("Resources");
+          if (resources.isNull()) return 0;
+          const xobjects = resources.get("XObject");
+          if (xobjects.isNull()) return 0;
+          return maxImagePixelsIn(xobjects, 0);
         },
       };
     },

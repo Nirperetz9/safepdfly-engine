@@ -19,6 +19,12 @@ export interface InputEnginePage {
   readonly view: readonly [number, number, number, number];
   /** True when any non-whitespace text item exists on the page. */
   hasNonWhitespaceText(): Promise<boolean>;
+  /**
+   * T040 — Number of content-stream operators on the page, for the
+   * per-page operator budget guard. A full parse; the worker time budget
+   * bounds pathological streams.
+   */
+  countOperators(): Promise<number>;
 }
 
 export interface InputEngineDoc {
@@ -57,6 +63,11 @@ class PdfJsEnginePage implements InputEnginePage {
         ((item as { str: string }).str.trim().length > 0 ||
           (item as { hasEOL?: boolean }).hasEOL === true),
     );
+  }
+
+  async countOperators(): Promise<number> {
+    const ops = await this.page.getOperatorList();
+    return ops.fnArray.length;
   }
 }
 
