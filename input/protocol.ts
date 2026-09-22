@@ -7,6 +7,7 @@
  * parser dumps) never crosses.
  */
 import type { PageDescriptor, SupportVerdict } from "../model.js";
+import type { SupportReasonCode } from "../support-policy/reasons.js";
 
 /** Stable input-policy version carried in every request/response. */
 export const INPUT_POLICY_VERSION = "input-policy/1" as const;
@@ -15,35 +16,13 @@ export const INPUT_POLICY_VERSION = "input-policy/1" as const;
  * Allowlisted reason codes for SOURCE_REJECTED. These are the only failure
  * identities that may cross the worker boundary; raw engine errors never do.
  * The features layer maps each code to bilingual UX copy.
+ * (Vocabulary owned by pdf/support-policy/reasons.ts; re-exported here.)
  */
-export const SUPPORT_REASON_CODES = [
-  "wrong-type",
-  "empty",
-  "damaged",
-  "locked",
-  "signed",
-  "xfa",
-  "form-widget",
-  "embedded-file",
-  "js-actions",
-  "rich-media",
-  "scanned",
-  "hybrid",
-  "annotation-overlap",
-  "hidden-layer",
-  "over-limit",
-  "disagreement",
-  "unexpected",
-] as const;
-
-export type SupportReasonCode = (typeof SUPPORT_REASON_CODES)[number];
-
-export function isSupportReasonCode(value: unknown): value is SupportReasonCode {
-  return (
-    typeof value === "string" &&
-    (SUPPORT_REASON_CODES as readonly string[]).includes(value)
-  );
-}
+export {
+  SUPPORT_REASON_CODES,
+  isSupportReasonCode,
+  type SupportReasonCode,
+} from "../support-policy/reasons.js";
 
 /** Request: open a transferred source buffer. Bytes travel out-of-band. */
 export interface OpenSourceRequest {
