@@ -8,6 +8,8 @@
 export type PageIndex = number & { readonly __brand: "PageIndex" };
 export type PdfPoint = number & { readonly __brand: "PdfPoint" };
 export type ViewportPixel = number & { readonly __brand: "ViewportPixel" };
+/** Hex SHA-256 digest of exact candidate bytes. */
+export type Sha256Digest = string & { readonly __brand: "Sha256Digest" };
 
 /** Normalized page rotation in degrees: 0 | 90 | 180 | 270. */
 export type PageRotation = 0 | 90 | 180 | 270;

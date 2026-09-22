@@ -14,9 +14,7 @@ import {
   type PageContext,
   type PageIndex,
   type PageRotation,
-  type PdfPoint,
   type PdfRect,
-  type ViewportPixel,
   type ViewportRect,
 } from "./types.js";
 
