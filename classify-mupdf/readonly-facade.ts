@@ -3,9 +3,10 @@
  *
  * This module is the ONLY place in the classifier path that imports "mupdf".
  * It exposes a minimal, frozen, read-only surface: open a document, count
- * pages, and read per-page geometry plus text/image evidence. No mutation,
- * save, redaction, annotation, or embedding API is reachable through the
- * returned objects — they are plain wrappers, not MuPDF instances.
+ * pages, and read per-page geometry, text/image evidence, and annotation /
+ * optional-content evidence. No mutation, save, redaction, annotation, or
+ * embedding API is reachable through the returned objects — they are plain
+ * wrappers, not MuPDF instances.
  *
  * A static test (classify.test.ts) enforces this boundary:
  *  - no other module in the classify path imports "mupdf";
@@ -31,6 +32,37 @@ export interface ReadOnlyPage {
    * raster image blocks (0..1) — the scanned/hybrid signal (T037).
    */
   contentEvidence(): { chars: number; imageBlocks: number; imageCoverage: number };
+  /**
+   * Annotation and optional-content evidence (T086), read-only.
+   * Annotation rects are raw /Rect values in default user space
+   * (unrotated, y-up) — the canonical frame selections use.
+   */
+  markupEvidence(): PageMarkupEvidence;
+}
+
+/**
+ * T086 — Per-page markup evidence for the annotation/optional-content
+ * support boundary. Evidence only; verdicts belong to support-policy.
+ */
+export interface PageMarkupEvidence {
+  /** Annotations with their raw /Rect in default user space (canonical frame). */
+  readonly annotations: readonly MarkupAnnotation[];
+  /**
+   * True when the annotation enumeration failed: an overlapping annotation
+   * cannot be ruled out (fail-closed upstream as annotation-overlap).
+   */
+  readonly annotationsIndeterminate: boolean;
+  /**
+   * True when optional-content constructs affect the page (page /OC, OCG
+   * marked-content properties, or OCG-gated XObjects), or when that could
+   * not be ruled out (fail-closed upstream as hidden-layer).
+   */
+  readonly optionalContent: boolean;
+}
+
+export interface MarkupAnnotation {
+  readonly type: string;
+  readonly rect: NativeBox;
 }
 
 export interface ReadOnlyDocument {
@@ -81,6 +113,72 @@ export const NO_FEATURES: DocumentFeatures = Object.freeze({
 
 function toNumberOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+/**
+ * Minimal structural type for trailer/catalog/page-dictionary reads.
+ * Note: calling .get() on a null PDFObject throws, so every chain is
+ * isNull-guarded. All operations are reads.
+ */
+type StructObj = {
+  isNull(): boolean;
+  get(key: string): StructObj;
+  getInheritable(key: string): StructObj;
+  valueOf(): unknown;
+  asJS(): unknown;
+  forEach(fn: (val: StructObj, key: number | string) => void): void;
+  readonly length: number;
+};
+
+function normalizeBox(values: unknown): NativeBox | null {  if (!Array.isArray(values) || values.length !== 4) return null;
+  const nums: number[] = [];
+  for (const v of values) {
+    if (typeof v !== "number" || !Number.isFinite(v)) return null;
+    nums.push(v);
+  }
+  const [a, b, c, d] = nums as [number, number, number, number];
+  return Object.freeze([
+    Math.min(a, c),
+    Math.min(b, d),
+    Math.max(a, c),
+    Math.max(b, d),
+  ]) as NativeBox;
+}
+
+/**
+ * True when an XObject name tree (or nested XObject resources, depth ≤ 2)
+ * carries OCG gating: a direct /OC entry, or OCG marked-content
+ * properties. Throws on walk errors so the caller can fail closed.
+ */
+function xobjectUsesOC(xobjects: StructObj, depth: number): boolean {
+  if (depth > 2) return false;
+  let found = false;
+  xobjects.forEach((val) => {
+    if (found) return;
+    if (!val.get("OC").isNull()) {
+      found = true;
+      return;
+    }
+    const resources = val.get("Resources");
+    if (!resources.isNull()) {
+      const properties = resources.get("Properties");
+      if (!properties.isNull()) {
+        let count = 0;
+        properties.forEach(() => {
+          count++;
+        });
+        if (count > 0) {
+          found = true;
+          return;
+        }
+      }
+      const nested = resources.get("XObject");
+      if (!nested.isNull() && xobjectUsesOC(nested, depth + 1)) {
+        found = true;
+      }
+    }
+  });
+  return found;
 }
 
 export function openDocumentReadOnly(data: ArrayBuffer): ReadOnlyDocument {
@@ -197,7 +295,8 @@ export function openDocumentReadOnly(data: ArrayBuffer): ReadOnlyDocument {
       // Cast through unknown so the facade never leaks MuPDF instance types.
       const raw = doc.loadPage(index) as unknown as {
         getBounds(box?: "MediaBox" | "CropBox"): [number, number, number, number];
-        getObject(): { getInheritable(key: string): { valueOf(): unknown } };
+        getObject(): StructObj;
+        getAnnotations(): { getType(): string; getObject(): StructObj }[];
         toStructuredText(options: string): {
           walk(walker: {
             onChar?: () => void;
@@ -245,6 +344,72 @@ export function openDocumentReadOnly(data: ArrayBuffer): ReadOnlyDocument {
           const imageCoverage =
             pageArea > 0 ? Math.min(1, imageArea / pageArea) : 0;
           return { chars, imageBlocks, imageCoverage };
+        },
+        markupEvidence(): PageMarkupEvidence {
+          const annotations: MarkupAnnotation[] = [];
+          let annotationsIndeterminate = false;
+          let optionalContent = false;
+          // Annotation enumeration. Raw /Rect is read from the dictionary:
+          // annot.getRect() is frame-transformed per subtype and throws for
+          // some subtypes (verified: Highlight), so it is not used.
+          try {
+            for (const annot of raw.getAnnotations()) {
+              let type = "unknown";
+              try {
+                type = String(annot.getType());
+              } catch {
+                annotationsIndeterminate = true;
+                continue;
+              }
+              const rectObj = annot.getObject().get("Rect");
+              if (rectObj.isNull()) {
+                annotationsIndeterminate = true;
+                continue;
+              }
+              const rect = normalizeBox(rectObj.asJS());
+              if (rect === null) {
+                annotationsIndeterminate = true;
+                continue;
+              }
+              annotations.push(Object.freeze({ type, rect }));
+            }
+          } catch {
+            annotationsIndeterminate = true;
+          }
+          // Optional-content constructs: page /OC, OCG marked-content
+          // properties in Resources, or OCG-gated (nested) XObjects.
+          // Any walk failure fails closed toward optionalContent = true.
+          try {
+            const pageObj = raw.getObject();
+            if (!pageObj.get("OC").isNull()) {
+              optionalContent = true;
+            } else {
+              const resources = pageObj.getInheritable("Resources");
+              if (!resources.isNull()) {
+                const properties = resources.get("Properties");
+                if (!properties.isNull()) {
+                  let count = 0;
+                  properties.forEach(() => {
+                    count++;
+                  });
+                  if (count > 0) optionalContent = true;
+                }
+                if (!optionalContent) {
+                  const xobjects = resources.get("XObject");
+                  if (!xobjects.isNull()) {
+                    optionalContent = xobjectUsesOC(xobjects, 0);
+                  }
+                }
+              }
+            }
+          } catch {
+            optionalContent = true;
+          }
+          return Object.freeze({
+            annotations: Object.freeze(annotations),
+            annotationsIndeterminate,
+            optionalContent,
+          });
         },
       };
     },

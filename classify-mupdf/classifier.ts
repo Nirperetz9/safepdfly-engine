@@ -13,6 +13,7 @@
 import type {
   DocumentFeatures,
   NativeBox,
+  PageMarkupEvidence,
   ReadOnlyDocument,
 } from "./readonly-facade.js";
 
@@ -32,6 +33,8 @@ export interface ClassifyPageEvidence {
   imageBlocks: number;
   /** Fraction of the visible page area covered by raster images (0..1). */
   imageCoverage: number;
+  /** Annotation / optional-content evidence for the T086 boundary check. */
+  markup: PageMarkupEvidence;
 }
 
 export interface ClassifyReport {
@@ -168,6 +171,7 @@ export async function classifySource(
         textChars: chars,
         imageBlocks,
         imageCoverage,
+        markup: page.markupEvidence(),
       };
     } catch {
       throw new ClassifyError("corrupt");
