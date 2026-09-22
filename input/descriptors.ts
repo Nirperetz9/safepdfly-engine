@@ -42,6 +42,37 @@ function probeClassification(
 }
 
 /**
+ * Stable identity fingerprint of one descriptor's geometry. Used to detect
+ * source drift between open and transformation (T061). FNV-1a 64-bit over a
+ * canonical serialization — an identity tag, not a security digest.
+ */
+export function fingerprintDescriptor(d: PageDescriptor): string {
+  const canonical = JSON.stringify([
+    d.pageIndex,
+    [...d.mediaBox],
+    [...d.context.cropBox],
+    d.context.rotation,
+    d.context.userUnit,
+    d.classification,
+  ]);
+  let h1 = 0xcbf29ce4;
+  let h2 = 0x84222325;
+  for (let i = 0; i < canonical.length; i++) {
+    const c = canonical.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193);
+    h2 = Math.imul(h2 ^ c, 0x01000193);
+  }
+  return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
+}
+
+/** Stable fingerprint of a whole descriptor set (page order matters). */
+export function fingerprintDescriptors(
+  descriptors: readonly PageDescriptor[],
+): string {
+  return descriptors.map(fingerprintDescriptor).join(":");
+}
+
+/**
  * Extract one frozen descriptor per page. Throws DescriptorError on
  * degenerate geometry; the caller maps it to a stable reason code.
  */
