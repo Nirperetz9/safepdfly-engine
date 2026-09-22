@@ -15,7 +15,10 @@ import {
   classifySource,
   type ClassifyReport,
 } from "../classify-mupdf/classifier.js";
-import { openDocumentReadOnly } from "../classify-mupdf/readonly-facade.js";
+import {
+  openDocumentReadOnly,
+  NO_FEATURES,
+} from "../classify-mupdf/readonly-facade.js";
 import { compareEngines, GEOMETRY_EPSILON_PT } from "./dual-engine.js";
 
 const require = createRequire(import.meta.url);
@@ -86,7 +89,7 @@ describe("fail-closed disagreement", () => {
     const pages = report.pages.map((p, i) =>
       i === pageIndex ? { ...p, ...patch } : p,
     );
-    return { pageCount: report.pageCount, pages };
+    return { ...report, pages };
   }
 
   it("rotation mismatch", async () => {
@@ -121,6 +124,7 @@ describe("fail-closed disagreement", () => {
     const cmp = compareEngines(descriptors, {
       pageCount: report.pageCount + 1,
       pages: report.pages,
+      features: report.features,
     });
     expect(cmp).toEqual({ ok: false, reason: "disagreement" });
   });
@@ -169,6 +173,7 @@ describe("fail-closed disagreement", () => {
       compareEngines(descriptors, {
         pageCount: 1,
         pages: [],
+        features: NO_FEATURES,
       }),
     ).toEqual({ ok: false, reason: "disagreement" });
   });

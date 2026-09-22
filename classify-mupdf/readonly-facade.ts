@@ -43,7 +43,41 @@ export interface ReadOnlyDocument {
    * A repaired document is not a trustworthy source for a safety verdict.
    */
   wasRepaired(): boolean;
+  /**
+   * Document-level unsupported-feature evidence (T038), read from the
+   * trailer/catalog and page dictionaries. Read-only; never throws for
+   * malformed structures — unreadable state yields all-false.
+   */
+  documentFeatures(): DocumentFeatures;
 }
+
+/**
+ * T038 — Unsupported-feature evidence. Each flag maps to a stable
+ * SupportReasonCode via adjudicateFeatures (support-policy/unsupported.ts).
+ */
+export interface DocumentFeatures {
+  /** XFA form (AcroForm /XFA). */
+  readonly xfa: boolean;
+  /** Interactive form widgets (AcroForm fields or page widgets). */
+  readonly formWidgets: boolean;
+  /** Digital signature present (AcroForm /SigFlags bit 1). */
+  readonly signed: boolean;
+  /** Embedded files (/EmbeddedFiles name tree). */
+  readonly embeddedFiles: boolean;
+  /** JavaScript or action-bearing constructs (OpenAction, /AA, name tree). */
+  readonly javaScript: boolean;
+  /** Rich-media annotations (RichMedia/Sound/Movie/Screen/3D). */
+  readonly richMedia: boolean;
+}
+
+export const NO_FEATURES: DocumentFeatures = Object.freeze({
+  xfa: false,
+  formWidgets: false,
+  signed: false,
+  embeddedFiles: false,
+  javaScript: false,
+  richMedia: false,
+});
 
 function toNumberOr(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -63,6 +97,100 @@ export function openDocumentReadOnly(data: ArrayBuffer): ReadOnlyDocument {
       return typeof pdfDoc.wasRepaired === "function"
         ? pdfDoc.wasRepaired()
         : false;
+    },
+    documentFeatures(): DocumentFeatures {
+      // Minimal structural type for the trailer/catalog reads. Note: calling
+      // .get() on a null PDFObject throws, so every chain is isNull-guarded.
+      type PdfObj = {
+        isNull(): boolean;
+        get(key: string): PdfObj;
+        valueOf(): unknown;
+        asJS(): unknown;
+        readonly length: number;
+      };
+      // True when a converted action dictionary carries JavaScript.
+      const mentionsJs = (value: unknown, depth: number): boolean => {
+        if (depth > 4 || value === null || typeof value !== "object")
+          return false;
+        if (Array.isArray(value))
+          return value.some((v) => mentionsJs(v, depth + 1));
+        const obj = value as Record<string, unknown>;
+        if (obj["S"] === "JavaScript" || "JS" in obj) return true;
+        return Object.values(obj).some((v) => mentionsJs(v, depth + 1));
+      };
+      try {
+        const pdf = doc as unknown as {
+          getTrailer(): PdfObj;
+          getEmbeddedFiles(): Record<string, unknown>;
+        };
+        const root = pdf.getTrailer().get("Root");
+        const acro = root.get("AcroForm");
+        const hasAcro = !acro.isNull();
+
+        const xfa = hasAcro && !acro.get("XFA").isNull();
+
+        const sigFlags = hasAcro ? acro.get("SigFlags").valueOf() : 0;
+        const signed =
+          typeof sigFlags === "number" && (sigFlags & 1) !== 0;
+
+        const embeddedFiles =
+          Object.keys(pdf.getEmbeddedFiles()).length > 0;
+
+        const openAction = root.get("OpenAction");
+        const docAA = root.get("AA");
+        const names = root.get("Names");
+        let javaScript =
+          (!openAction.isNull() && mentionsJs(openAction.asJS(), 0)) ||
+          (!docAA.isNull() && mentionsJs(docAA.asJS(), 0)) ||
+          (!names.isNull() && !names.get("JavaScript").isNull());
+
+        let formWidgets = hasAcro && acro.get("Fields").length > 0;
+        let richMedia = false;
+        const RICH_MEDIA = new Set([
+          "RichMedia",
+          "Sound",
+          "Movie",
+          "Screen",
+          "3D",
+        ]);
+        const pageCount = doc.countPages();
+        for (let i = 0; i < pageCount; i++) {
+          const rawPage = doc.loadPage(i) as unknown as {
+            getWidgets(): unknown[];
+            getAnnotations(): { getType(): string }[];
+            getObject(): PdfObj;
+          };
+          if (!formWidgets && rawPage.getWidgets().length > 0)
+            formWidgets = true;
+          if (!richMedia) {
+            for (const annot of rawPage.getAnnotations()) {
+              if (RICH_MEDIA.has(annot.getType())) {
+                richMedia = true;
+                break;
+              }
+            }
+          }
+          if (!javaScript) {
+            const pageAA = rawPage.getObject().get("AA");
+            if (!pageAA.isNull() && mentionsJs(pageAA.asJS(), 0))
+              javaScript = true;
+          }
+          if (formWidgets && richMedia && javaScript) break;
+        }
+
+        return Object.freeze({
+          xfa,
+          formWidgets,
+          signed,
+          embeddedFiles,
+          javaScript,
+          richMedia,
+        });
+      } catch {
+        // Unreadable structure: claim no features rather than a wrong
+        // feature. The document still faces every other fail-closed gate.
+        return NO_FEATURES;
+      }
     },
     page(index: number): ReadOnlyPage {
       // openDocument on a PDF yields a PDFDocument; loadPage a PDFPage.

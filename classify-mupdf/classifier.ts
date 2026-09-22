@@ -3,13 +3,15 @@
  *
  * Produces per-page evidence (independent boxes, rotation, UserUnit,
  * text/image presence) used by the dual-engine comparison (T036) and the
- * scanned/hybrid policy (T037). Evidence only — verdicts belong to the
- * support-policy layer.
+ * scanned/hybrid policy (T037), plus document-level unsupported-feature
+ * evidence (T038). Evidence only — verdicts belong to the support-policy
+ * layer.
  *
  * Resource budgets are enforced by the orchestrator (T036/T040) before this
  * classifier runs; the classifier itself only reports what it sees.
  */
 import type {
+  DocumentFeatures,
   NativeBox,
   ReadOnlyDocument,
 } from "./readonly-facade.js";
@@ -35,6 +37,12 @@ export interface ClassifyPageEvidence {
 export interface ClassifyReport {
   pageCount: number;
   pages: readonly ClassifyPageEvidence[];
+  /**
+   * Document-level unsupported-feature evidence (T038). The support-policy
+   * layer adjudicates these before page-level verdicts; a hostile feature on
+   * a zero-page document still rejects it (fail-closed).
+   */
+  features: DocumentFeatures;
 }
 
 /** Stable classifier failure codes (subset of SupportReasonCode semantics). */
@@ -70,6 +78,17 @@ function deepFreezePages(
 ): readonly ClassifyPageEvidence[] {
   for (const p of pages) Object.freeze(p);
   return Object.freeze(pages);
+}
+
+function hasAnyFeature(features: DocumentFeatures): boolean {
+  return (
+    features.xfa ||
+    features.formWidgets ||
+    features.signed ||
+    features.embeddedFiles ||
+    features.javaScript ||
+    features.richMedia
+  );
 }
 
 /**
@@ -114,7 +133,25 @@ export async function classifySource(
   } catch {
     throw new ClassifyError("corrupt");
   }
-  if (pageCount === 0) throw new ClassifyError("empty");
+  // Unsupported-feature evidence is collected before the page gates: a
+  // zero-page document carrying e.g. a JavaScript OpenAction is hostile,
+  // not merely empty, and must be rejected with its feature code.
+  let features: DocumentFeatures;
+  try {
+    features = doc.documentFeatures();
+  } catch {
+    throw new ClassifyError("corrupt");
+  }
+  if (pageCount === 0) {
+    if (hasAnyFeature(features)) {
+      return {
+        pageCount: 0,
+        pages: Object.freeze([]),
+        features,
+      };
+    }
+    throw new ClassifyError("empty");
+  }
 
   const pages: ClassifyPageEvidence[] = [];
   for (let i = 0; i < pageCount; i++) {
@@ -137,5 +174,5 @@ export async function classifySource(
     }
     pages.push(pageEvidence);
   }
-  return { pageCount, pages: deepFreezePages(pages) };
+  return { pageCount, pages: deepFreezePages(pages), features };
 }
