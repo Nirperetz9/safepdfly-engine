@@ -61,6 +61,12 @@ export {
   unmarkedPageText,
 } from "./checks/duplicates.js";
 export {
+  assembleVerificationReport,
+  REPORT_SELECTION_MISSING,
+  REPORT_ASPECT_MISSING,
+  type AssemblerSelection,
+} from "./assembler.js";
+export {
   runVisualChecks,
   toDeviceBox,
   VISUAL_SCALE,

@@ -103,11 +103,20 @@ export interface VerificationReport {
   readonly candidateSha256: Sha256Digest;
   readonly engineVersion: string;
   readonly policyVersion: string;
+  /** Exact PDF.js version that performed verification (T069 evidence). */
+  readonly pdfjsVersion: string;
+  /** Number of marked rectangles the report covers (T069 evidence). */
+  readonly rectCount: number;
   readonly outcome: VerificationOutcome;
   readonly documentChecks: ReadonlyArray<{ readonly check: string; readonly outcome: VerificationOutcome }>;
   readonly selectionChecks: readonly SelectionCheckResult[];
   readonly outsideMaskOutcome: VerificationOutcome;
-  readonly warnings: ReadonlyArray<{ readonly code: string; readonly pageIndex: PageIndex }>;
+  readonly warnings: ReadonlyArray<{
+    readonly code: string;
+    readonly pageIndex: PageIndex;
+    /** 1-based mark number whose selected value survived; never content. */
+    readonly selectionNumber: number;
+  }>;
   /** Stable bilingual reason-code keys, never raw document content. */
   readonly reasonCodes: readonly string[];
 }
