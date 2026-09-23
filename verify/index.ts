@@ -54,7 +54,12 @@ export {
 export { VERIFY_TIMEOUT_MS, createVerifyTimeoutMs } from "./timeouts.js";
 export { runVerificationChecks } from "./checks.js";
 export { runDocumentChecks } from "./checks/document.js";
-export { runTextChecks, textItemBox, hasVisibleText, boxesOverlap } from "./checks/text.js";
+export { runTextChecks, textItemBox, hasVisibleText, normalizeTextValue, boxesOverlap } from "./checks/text.js";
+export {
+  runDuplicateWarnings,
+  selectedValueForRect,
+  unmarkedPageText,
+} from "./checks/duplicates.js";
 export {
   runVisualChecks,
   toDeviceBox,

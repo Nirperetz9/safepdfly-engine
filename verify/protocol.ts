@@ -105,7 +105,9 @@ export interface VerifySelectionCheck {
 
 export interface VerifyWarning {
   readonly code: "duplicate-occurrence";
-  readonly page: number;
+  /** 0-based page index where the duplicate value survives (unmarked location). */
+  readonly pageIndex: number;
+  /** 1-based mark number whose selected value survived. Content never included. */
   readonly selectionNumber: number;
 }
 

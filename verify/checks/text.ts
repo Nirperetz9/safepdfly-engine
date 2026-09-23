@@ -83,13 +83,20 @@ export function textItemBox(item: VerifyTextItem): TextBox | null {
 }
 
 /**
- * Normalized emptiness test: NFC, strip format characters (zero-width
- * spaces, directional marks, BOM), then whitespace. Anything left is
- * visible, selectable text — in any script.
+ * Normalized text value: NFC, strip format characters (zero-width spaces,
+ * directional marks, BOM), collapse whitespace, trim. Script-agnostic;
+ * "exact" means exact after this normalization — never fuzzy.
+ */
+export function normalizeTextValue(str: string): string {
+  return str.normalize("NFC").replace(/\p{Cf}/gu, "").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Normalized emptiness test: anything left after normalization is visible,
+ * selectable text — in any script.
  */
 export function hasVisibleText(str: string): boolean {
-  const stripped = str.normalize("NFC").replace(/\p{Cf}/gu, "");
-  return stripped.trim() !== "";
+  return normalizeTextValue(str) !== "";
 }
 
 function normalizeRect(rect: VerifyRect): TextBox {
