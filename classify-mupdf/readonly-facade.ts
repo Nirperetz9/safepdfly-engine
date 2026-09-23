@@ -102,8 +102,22 @@ export interface DocumentFeatures {
   readonly signed: boolean;
   /** Embedded files (/EmbeddedFiles name tree). */
   readonly embeddedFiles: boolean;
-  /** JavaScript or action-bearing constructs (OpenAction, /AA, name tree). */
+  /**
+   * JavaScript or action-bearing constructs (OpenAction, /AA, name tree).
+   * T103: split by source so intake can route exactly what T099 removes.
+   */
   readonly javaScript: boolean;
+  /**
+   * T103 — JavaScript carried by document-level constructs (OpenAction,
+   * catalog /AA, the /JavaScript name tree): fully removed by the T099
+   * sanitize step.
+   */
+  readonly javaScriptDocument: boolean;
+  /**
+   * T103 — JavaScript carried by page-level /AA entries: NOT removed by
+   * the T099 sanitize step, so it still hard-rejects as js-actions.
+   */
+  readonly javaScriptPage: boolean;
   /** Rich-media annotations (RichMedia/Sound/Movie/Screen/3D). */
   readonly richMedia: boolean;
 }
@@ -114,6 +128,8 @@ export const NO_FEATURES: DocumentFeatures = Object.freeze({
   signed: false,
   embeddedFiles: false,
   javaScript: false,
+  javaScriptDocument: false,
+  javaScriptPage: false,
   richMedia: false,
 });
 
@@ -272,10 +288,14 @@ export function openDocumentReadOnly(data: ArrayBuffer): ReadOnlyDocument {
         const openAction = root.get("OpenAction");
         const docAA = root.get("AA");
         const names = root.get("Names");
-        let javaScript =
+        // T103 — split JavaScript by source: document-level constructs are
+        // fully removed by the T099 sanitize step (soft route), page-level
+        // /AA entries are not (hard reject).
+        const javaScriptDocument =
           (!openAction.isNull() && mentionsJs(openAction.asJS(), 0)) ||
           (!docAA.isNull() && mentionsJs(docAA.asJS(), 0)) ||
           (!names.isNull() && !names.get("JavaScript").isNull());
+        let javaScriptPage = false;
 
         let formWidgets = hasAcro && acro.get("Fields").length > 0;
         let richMedia = false;
@@ -303,12 +323,13 @@ export function openDocumentReadOnly(data: ArrayBuffer): ReadOnlyDocument {
               }
             }
           }
-          if (!javaScript) {
+          if (!javaScriptPage) {
             const pageAA = rawPage.getObject().get("AA");
             if (!pageAA.isNull() && mentionsJs(pageAA.asJS(), 0))
-              javaScript = true;
+              javaScriptPage = true;
           }
-          if (formWidgets && richMedia && javaScript) break;
+          if (formWidgets && richMedia && javaScriptDocument && javaScriptPage)
+            break;
         }
 
         return Object.freeze({
@@ -316,13 +337,18 @@ export function openDocumentReadOnly(data: ArrayBuffer): ReadOnlyDocument {
           formWidgets,
           signed,
           embeddedFiles,
-          javaScript,
+          javaScript: javaScriptDocument || javaScriptPage,
+          javaScriptDocument,
+          javaScriptPage,
           richMedia,
         });
       } catch {
-        // Unreadable structure: claim no features rather than a wrong
-        // feature. The document still faces every other fail-closed gate.
-        return NO_FEATURES;
+        // T103 — unreadable feature structure fails closed: the caller
+        // (classifier) maps the throw to a "corrupt" classify failure, so
+        // intake rejects with "damaged". Silently claiming NO_FEATURES
+        // here would let a corrupt EmbeddedFiles tree masquerade as
+        // "no embedded files" and bypass the review notice + sanitization.
+        throw new Error("unreadable-document-features");
       }
     },
     page(index: number): ReadOnlyPage {

@@ -148,6 +148,25 @@ describe("fail-closed classification", () => {
     expect(err).toBeInstanceOf(ClassifyError);
     expect(err.code).toBe("not-a-pdf");
   });
+
+  it("T103: unreadable feature structure fails closed as corrupt (never claims no features)", async () => {
+    const doc = {
+      pageCount: () => 1,
+      page: (): never => {
+        throw new Error("no pages");
+      },
+      isEncrypted: () => false,
+      wasRepaired: () => false,
+      documentFeatures: (): never => {
+        throw new Error("unreadable-document-features");
+      },
+    };
+    const err = await classifySource(fixture("text/en-basic.pdf"), {
+      open: (() => doc) as never,
+    }).catch((e) => e);
+    expect(err).toBeInstanceOf(ClassifyError);
+    expect(err.code).toBe("corrupt");
+  });
 });
 
 describe("classify worker client (single-use)", () => {

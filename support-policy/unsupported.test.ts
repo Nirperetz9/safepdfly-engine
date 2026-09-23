@@ -126,12 +126,20 @@ describe("adjudicateFeatures", () => {
     signed: true,
     embeddedFiles: true,
     javaScript: true,
+    javaScriptDocument: true,
+    javaScriptPage: true,
     richMedia: true,
   };
 
   it("supports featureless documents", () => {
-    expect(adjudicateFeatures(NO_FEATURES)).toEqual({ supported: true });
-    expect(adjudicateFeatures(null)).toEqual({ supported: true });
+    expect(adjudicateFeatures(NO_FEATURES)).toEqual({
+      supported: true,
+      sanitizableFindings: [],
+    });
+    expect(adjudicateFeatures(null)).toEqual({
+      supported: true,
+      sanitizableFindings: [],
+    });
   });
 
   it("names exactly one reason with fixed precedence", () => {
@@ -144,20 +152,67 @@ describe("adjudicateFeatures", () => {
     expect(adjudicateFeatures({ ...rest, signed: false })).toMatchObject({
       reason: "form-widget",
     });
+    // T103 — page-level /AA JavaScript still hard-rejects (T099 cannot
+    // strip it), outranking rich-media as js-actions did before.
     expect(
       adjudicateFeatures({ ...rest, signed: false, formWidgets: false }),
-    ).toMatchObject({ reason: "embedded-file" });
+    ).toMatchObject({ reason: "js-actions" });
     expect(
       adjudicateFeatures({
         ...rest,
         signed: false,
         formWidgets: false,
-        embeddedFiles: false,
+        javaScriptPage: false,
       }),
-    ).toMatchObject({ reason: "js-actions" });
-    expect(adjudicateFeatures({ ...NO_FEATURES, richMedia: true })).toMatchObject(
-      { reason: "rich-media" },
-    );
+    ).toMatchObject({ reason: "rich-media" });
+  });
+
+  it("T103: routes embedded files to review with a finding instead of rejecting", () => {
+    expect(
+      adjudicateFeatures({ ...NO_FEATURES, embeddedFiles: true }),
+    ).toEqual({ supported: true, sanitizableFindings: ["embedded-files"] });
+  });
+
+  it("T103: routes document-level JavaScript to review instead of rejecting", () => {
+    expect(
+      adjudicateFeatures({
+        ...NO_FEATURES,
+        javaScript: true,
+        javaScriptDocument: true,
+      }),
+    ).toEqual({ supported: true, sanitizableFindings: ["java-script"] });
+  });
+
+  it("T103: collects both findings when both layers are present", () => {
+    expect(
+      adjudicateFeatures({
+        ...NO_FEATURES,
+        embeddedFiles: true,
+        javaScript: true,
+        javaScriptDocument: true,
+      }),
+    ).toEqual({
+      supported: true,
+      sanitizableFindings: ["embedded-files", "java-script"],
+    });
+  });
+
+  it("T103: hard rejections outrank sanitizable findings", () => {
+    expect(
+      adjudicateFeatures({
+        ...NO_FEATURES,
+        embeddedFiles: true,
+        formWidgets: true,
+      }),
+    ).toMatchObject({ supported: false, reason: "form-widget" });
+    expect(
+      adjudicateFeatures({
+        ...NO_FEATURES,
+        embeddedFiles: true,
+        javaScript: true,
+        javaScriptPage: true,
+      }),
+    ).toMatchObject({ supported: false, reason: "js-actions" });
   });
 });
 
@@ -180,7 +235,39 @@ describe("facade documentFeatures", () => {
     ]);
     const features = openDocumentReadOnly(bytes).documentFeatures();
     expect(features.javaScript).toBe(true);
+    // T103 — document-level JavaScript is sanitizable (soft route).
+    expect(features.javaScriptDocument).toBe(true);
+    expect(features.javaScriptPage).toBe(false);
     expect(features.xfa).toBe(false);
+  });
+
+  it("T103: detects page-level /AA JavaScript as page-sourced (hard reject)", () => {
+    const bytes = buildPdf([
+      "<< /Type /Catalog /Pages 2 0 R >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      PAGE(" /AA << /O << /S /JavaScript /JS (y) >> >>"),
+    ]);
+    const features = openDocumentReadOnly(bytes).documentFeatures();
+    expect(features.javaScript).toBe(true);
+    expect(features.javaScriptDocument).toBe(false);
+    expect(features.javaScriptPage).toBe(true);
+    expect(adjudicateFeatures(features)).toEqual({
+      supported: false,
+      reason: "js-actions",
+    });
+  });
+
+  it("T103: routes a JavaScript OpenAction to review instead of rejecting", () => {
+    const bytes = buildPdf([
+      "<< /Type /Catalog /Pages 2 0 R /OpenAction << /S /JavaScript /JS (x) >> >>",
+      "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+      PAGE(),
+    ]);
+    const features = openDocumentReadOnly(bytes).documentFeatures();
+    expect(adjudicateFeatures(features)).toEqual({
+      supported: true,
+      sanitizableFindings: ["java-script"],
+    });
   });
 
   it("detects form widgets via AcroForm fields", () => {
@@ -261,14 +348,15 @@ describe("negative corpus sweep", () => {
     expect(precheckSource(fixture("negative/javascript.pdf"))).toBeNull();
   });
 
-  it("embedded-file.pdf -> embedded-file", async () => {
+  it("T103: embedded-file.pdf routes to review with a finding (no longer rejected)", async () => {
     const { code, report } = await classifyFailure(
       "negative/embedded-file.pdf",
     );
     expect(code).toBe("ok");
     expect(report!.features.embeddedFiles).toBe(true);
-    expect(adjudicateFeatures(report!.features)).toMatchObject({
-      reason: "embedded-file",
+    expect(adjudicateFeatures(report!.features)).toEqual({
+      supported: true,
+      sanitizableFindings: ["embedded-files"],
     });
   });
 
@@ -298,7 +386,11 @@ describe("negative corpus sweep", () => {
       },
       isEncrypted: () => false,
       wasRepaired: () => false,
-      documentFeatures: () => ({ ...NO_FEATURES, javaScript: true }),
+      documentFeatures: () => ({
+        ...NO_FEATURES,
+        javaScript: true,
+        javaScriptPage: true,
+      }),
     };
     const bytes = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]).buffer;
     const report = await classifySource(bytes, {

@@ -6,6 +6,7 @@
  * digests, and geometry only.
  */
 import type { CanonicalRect, PageContext, PageIndex, Sha256Digest } from "./geometry/index.js";
+import type { SanitizableFinding } from "./support-policy/reasons.js";
 export type { PageIndex };
 
 /** Opaque session id; never derived from filename or content. */
@@ -45,6 +46,13 @@ export interface InputSupportEvidence {
   readonly mupdf: "supported";
   readonly pdfjs: "supported";
   readonly unsupportedFeatureFound: boolean;
+  /**
+   * T103 — findings the document carried into review (embedded files,
+   * document-level JavaScript): layers the T099 sanitize step fully
+   * removes. Empty for a clean intake. The T061 precondition blocks the
+   * run while any finding stands and sanitization was not applied.
+   */
+  readonly sanitizableFindings: readonly SanitizableFinding[];
 }
 export type PageClassification =
   | "blank"

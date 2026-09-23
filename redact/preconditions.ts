@@ -8,7 +8,9 @@
  *  2. at least one approved, round-trip-valid canonical rectangle exists;
  *  3. page descriptor fingerprints still match the source;
  *  4. no unsupported active/hidden feature was discovered;
- *  5. resource budgets permit a full rewrite plus fresh verification.
+ *  5. T103: no un-sanitized finding stands (embedded files / document-level
+ *     JavaScript block the run unless sanitization was actually applied);
+ *  6. resource budgets permit a full rewrite plus fresh verification.
  *
  * Any unmet precondition fails closed HERE, before the transform worker is
  * created. The result carries a stable code (no document content); the
@@ -17,6 +19,7 @@
 import { pdfToViewport, viewportToPdf } from "../geometry/transforms.js";
 import type { CanonicalRect } from "../geometry/types.js";
 import type { SupportVerdict } from "../model.js";
+import type { SanitizableFinding } from "../support-policy/reasons.js";
 import { checkInputSize, checkPageCount } from "../support-policy/budgets.js";
 import { GEOMETRY_EPSILON_PT } from "../support-policy/dual-engine.js";
 
@@ -124,6 +127,19 @@ export interface TransformPreconditionInput {
   readonly actualFingerprints: readonly string[];
   /** An unsupported active/hidden feature was discovered (T038). */
   readonly unsupportedFeatureFound: boolean;
+  /**
+   * T103 — findings the document carried into review (embedded files,
+   * document-level JavaScript). The run is blocked while any finding
+   * stands unless sanitization was actually applied (T099 removes exactly
+   * these layers; nothing else may clear the block).
+   */
+  readonly sanitizableFindings: readonly SanitizableFinding[];
+  /**
+   * T103 — the user's sanitize opt-in ANDed with Pro availability (the
+   * same AND the run uses before telling the worker to strip). True only
+   * when the transform will actually remove the sanitizable layers.
+   */
+  readonly sanitizeApplied: boolean;
   /** Source byte length. */
   readonly byteLength: number;
   /** Source page count. */
@@ -145,6 +161,12 @@ export function checkTransformPreconditions(
     return { ok: false, code: "not-supported" };
   }
   if (input.unsupportedFeatureFound) {
+    return { ok: false, code: "unsupported-feature" };
+  }
+  // T103 — a sanitizable finding blocks the run unless sanitization was
+  // actually applied. The check runs before the transform worker exists,
+  // so no candidate can ever be created with un-sanitized findings.
+  if (input.sanitizableFindings.length > 0 && !input.sanitizeApplied) {
     return { ok: false, code: "unsupported-feature" };
   }
   if (

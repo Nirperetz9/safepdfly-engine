@@ -30,6 +30,8 @@ const NO_FEATURES: DocumentFeatures = {
   signed: false,
   embeddedFiles: false,
   javaScript: false,
+  javaScriptDocument: false,
+  javaScriptPage: false,
   richMedia: false,
 };
 

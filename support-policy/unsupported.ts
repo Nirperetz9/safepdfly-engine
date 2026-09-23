@@ -12,7 +12,12 @@
  *      codes; mapClassifyFailure translates classifier codes into the
  *      shared SupportReasonCode vocabulary. Passwords are never attempted.
  *   3. adjudicateFeatures(report.features) — XFA, signatures, form widgets,
- *      embedded files, JavaScript/actions, rich media.
+ *      embedded files, JavaScript/actions, rich media. Since T103, embedded
+ *      files and *document-level* JavaScript no longer hard-reject: they
+ *      ride into review as sanitizable findings (the T099 sanitize step
+ *      fully removes them), and the T061 precondition blocks the run until
+ *      the user opts in. Page-level /AA JavaScript is not covered by T099
+ *      and still hard-rejects as js-actions.
  *   4. T037 scanned/hybrid adjudication on dual-engine-agreed pages (T036).
  *
  * Annotation and optional-content handling is T086's, scoped to selections;
@@ -20,7 +25,10 @@
  */
 import type { ClassifyFailureCode } from "../classify-mupdf/classifier.js";
 import type { DocumentFeatures } from "../classify-mupdf/readonly-facade.js";
-import type { SupportReasonCode } from "./reasons.js";
+import type {
+  SanitizableFinding,
+  SupportReasonCode,
+} from "./reasons.js";
 
 /**
  * Translate a classifier failure code into the shared vocabulary.
@@ -82,13 +90,26 @@ export function precheckSource(bytes: unknown): SupportReasonCode | null {
 }
 
 export type FeatureVerdict =
-  | { readonly supported: true }
+  | {
+      readonly supported: true;
+      /**
+       * T103 — layers the document carries that T099 sanitization fully
+       * removes. Non-empty only for embedded files and document-level
+       * JavaScript; the T061 precondition blocks the run while any finding
+       * stands and the user has not opted into sanitization.
+       */
+      readonly sanitizableFindings: readonly SanitizableFinding[];
+    }
   | { readonly supported: false; readonly reason: SupportReasonCode };
 
 /**
- * Reject documents carrying unsupported features. Precedence is fixed and
- * documented: xfa, signed, form-widget, embedded-file, js-actions,
- * rich-media. The first hit wins; the verdict names exactly one reason.
+ * Adjudicate document-level features. Precedence is fixed and documented:
+ * hard rejections (xfa, signed, form-widget, page-level /AA JavaScript,
+ * rich-media) first; the first hit wins and the verdict names exactly one
+ * reason. Only when no hard-reject feature is present do embedded files
+ * and document-level JavaScript ride into review as sanitizable findings —
+ * the soft route covers exactly what T099 removes, nothing more.
+ *
  * Signed outranks form-widget because a lone signature field would
  * otherwise masquerade as an interactive form; the signature is the
  * salient unsupported feature.
@@ -96,16 +117,16 @@ export type FeatureVerdict =
 export function adjudicateFeatures(
   features: DocumentFeatures | null | undefined,
 ): FeatureVerdict {
-  if (!features) return { supported: true };
+  if (!features) return { supported: true, sanitizableFindings: [] };
   if (features.xfa) return { supported: false, reason: "xfa" };
   if (features.signed) return { supported: false, reason: "signed" };
   if (features.formWidgets)
     return { supported: false, reason: "form-widget" };
-  if (features.embeddedFiles)
-    return { supported: false, reason: "embedded-file" };
-  if (features.javaScript)
+  if (features.javaScriptPage)
     return { supported: false, reason: "js-actions" };
-  if (features.richMedia)
-    return { supported: false, reason: "rich-media" };
-  return { supported: true };
+  if (features.richMedia) return { supported: false, reason: "rich-media" };
+  const sanitizableFindings: SanitizableFinding[] = [];
+  if (features.embeddedFiles) sanitizableFindings.push("embedded-files");
+  if (features.javaScriptDocument) sanitizableFindings.push("java-script");
+  return { supported: true, sanitizableFindings };
 }

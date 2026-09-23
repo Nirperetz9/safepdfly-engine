@@ -52,6 +52,8 @@ function goodInput(): TransformPreconditionInput {
     expectedFingerprints: [fingerprint()],
     actualFingerprints: [fingerprint()],
     unsupportedFeatureFound: false,
+    sanitizableFindings: [],
+    sanitizeApplied: false,
     byteLength: 1024,
     pageCount: 1,
   };
@@ -78,6 +80,32 @@ describe("checkTransformPreconditions", () => {
     expect(
       checkTransformPreconditions({ ...goodInput(), unsupportedFeatureFound: true }),
     ).toEqual({ ok: false, code: "unsupported-feature" });
+  });
+
+  it("T103: fails closed when a sanitizable finding stands and sanitization was not applied", () => {
+    expect(
+      checkTransformPreconditions({
+        ...goodInput(),
+        sanitizableFindings: ["embedded-files"],
+        sanitizeApplied: false,
+      }),
+    ).toEqual({ ok: false, code: "unsupported-feature" });
+  });
+
+  it("T103: passes when sanitization was applied for the standing findings", () => {
+    expect(
+      checkTransformPreconditions({
+        ...goodInput(),
+        sanitizableFindings: ["embedded-files", "java-script"],
+        sanitizeApplied: true,
+      }),
+    ).toEqual({ ok: true });
+  });
+
+  it("T103: applying sanitization with no findings changes nothing", () => {
+    expect(
+      checkTransformPreconditions({ ...goodInput(), sanitizeApplied: true }),
+    ).toEqual({ ok: true });
   });
 
   it("fails closed with no rectangles", () => {
