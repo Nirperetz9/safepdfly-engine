@@ -91,6 +91,30 @@ export type TransformFailureCode =
   | "protocol"
   | "internal";
 
+/** The stable set, as a runtime list — the single source of truth. */
+const TRANSFORM_FAILURE_CODES = [
+  "precondition",
+  "invalid-request",
+  "engine-error",
+  "save-failed",
+  "self-check-failed",
+  "timeout",
+  "worker-error",
+  "protocol",
+  "internal",
+] as const satisfies readonly TransformFailureCode[];
+
+/**
+ * T090 — runtime guard for the stable failure-code set. Anything else
+ * (a raw engine string, a filename, extracted text) is NOT a code.
+ */
+export function isTransformFailureCode(value: unknown): value is TransformFailureCode {
+  return (
+    typeof value === "string" &&
+    (TRANSFORM_FAILURE_CODES as readonly string[]).includes(value)
+  );
+}
+
 export interface TransformFailedMessage {
   type: "TRANSFORM_FAILED";
   reason: TransformFailureCode;

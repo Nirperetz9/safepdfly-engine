@@ -6,6 +6,7 @@ export {
   TRANSFORM_ENGINE_VERSION,
   TRANSFORM_MESSAGE_TYPES,
   isApplyRedactionsMessage,
+  isTransformFailureCode,
   isTransformOutbound,
   type ApplyRedactionsMessage,
   type CandidateReadyMessage,
