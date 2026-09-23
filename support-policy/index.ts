@@ -1,3 +1,11 @@
+/**
+ * Copyright (C) 2026 SafePDFly contributors.
+ *
+ * This file is part of the SafePDFly engine, licensed under the GNU Affero
+ * General Public License v3.0 or later. See LICENSE in the engine package
+ * root for the full text.
+ */
+
 // T104 — open-core blessed surface: host-side intake policy API.
 //
 // `support-policy` is pure host-side logic (no worker, no MuPDF at runtime —

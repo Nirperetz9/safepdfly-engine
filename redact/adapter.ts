@@ -1,4 +1,12 @@
 /**
+ * Copyright (C) 2026 SafePDFly contributors.
+ *
+ * This file is part of the SafePDFly engine, licensed under the GNU Affero
+ * General Public License v3.0 or later. See LICENSE in the engine package
+ * root for the full text.
+ */
+
+/**
  * T059 — MuPDF.js engine adapter for the approved redaction policy.
  *
  * This module with save.ts and selfcheck.ts forms the mutation facade: the

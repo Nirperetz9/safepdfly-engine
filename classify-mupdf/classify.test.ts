@@ -1,4 +1,12 @@
 /**
+ * Copyright (C) 2026 SafePDFly contributors.
+ *
+ * This file is part of the SafePDFly engine, licensed under the GNU Affero
+ * General Public License v3.0 or later. See LICENSE in the engine package
+ * root for the full text.
+ */
+
+/**
  * T085 — Isolated read-only MuPDF classifier.
  *
  * 1. Read-only boundary: only the facade imports "mupdf"; no mutation API

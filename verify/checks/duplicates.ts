@@ -1,4 +1,12 @@
 /**
+ * Copyright (C) 2026 SafePDFly contributors.
+ *
+ * This file is part of the SafePDFly engine, licensed under the GNU Affero
+ * General Public License v3.0 or later. See LICENSE in the engine package
+ * root for the full text.
+ */
+
+/**
  * T068 — duplicate-occurrence warning (selection scope).
  *
  * The selected value is derived from the SOURCE document: the normalized

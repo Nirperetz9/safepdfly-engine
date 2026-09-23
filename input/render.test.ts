@@ -1,4 +1,12 @@
 /**
+ * Copyright (C) 2026 SafePDFly contributors.
+ *
+ * This file is part of the SafePDFly engine, licensed under the GNU Affero
+ * General Public License v3.0 or later. See LICENSE in the engine package
+ * root for the full text.
+ */
+
+/**
  * T041 — Render worker protocol tests.
  *
  * The handler is exercised with a stub engine: open/render/close lifecycle,

@@ -1,4 +1,12 @@
 /**
+ * Copyright (C) 2026 SafePDFly contributors.
+ *
+ * This file is part of the SafePDFly engine, licensed under the GNU Affero
+ * General Public License v3.0 or later. See LICENSE in the engine package
+ * root for the full text.
+ */
+
+/**
  * Shared test helpers for the redact path. Test-only; not imported by
  * product code.
  *

@@ -1,4 +1,12 @@
 /**
+ * Copyright (C) 2026 SafePDFly contributors.
+ *
+ * This file is part of the SafePDFly engine, licensed under the GNU Affero
+ * General Public License v3.0 or later. See LICENSE in the engine package
+ * root for the full text.
+ */
+
+/**
  * T027 validation — throwing-spy tests in UI-like and worker-like contexts.
  * After installNetworkGuard, every network API throws synchronously, and the
  * guard cannot be bypassed by processing code.

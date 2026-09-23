@@ -1,4 +1,12 @@
 /**
+ * Copyright (C) 2026 SafePDFly contributors.
+ *
+ * This file is part of the SafePDFly engine, licensed under the GNU Affero
+ * General Public License v3.0 or later. See LICENSE in the engine package
+ * root for the full text.
+ */
+
+/**
  * T094 — Vector-crossing clip-instead-of-remove.
  *
  * Before T094 the adapter applied MuPDF's REDACT_LINE_ART_REMOVE_IF_TOUCHED,

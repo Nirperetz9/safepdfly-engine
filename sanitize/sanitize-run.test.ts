@@ -1,4 +1,12 @@
 /**
+ * Copyright (C) 2026 SafePDFly contributors.
+ *
+ * This file is part of the SafePDFly engine, licensed under the GNU Affero
+ * General Public License v3.0 or later. See LICENSE in the engine package
+ * root for the full text.
+ */
+
+/**
  * T099 — end-to-end sanitize run: the metadata-rich fixture goes through
  * the real transform worker path (dispatchTransform + production MuPDF
  * backend) with sanitize on/off, then the sanitized candidate goes through
@@ -14,7 +22,7 @@ import { describe, expect, it } from "vitest";
 import { createRequire } from "node:module";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { PDFDocument } from "mupdf";
-import { installNodeCanvas } from "../../src/test/corpus/node-canvas.js";
+import { installNodeCanvas } from "../../tests/helpers/node-canvas.js";
 import { createMuPdfBackend } from "../redact/adapter.js";
 import { dispatchTransform } from "../redact/handler.js";
 import {

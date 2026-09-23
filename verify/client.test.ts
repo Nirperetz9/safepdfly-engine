@@ -1,4 +1,12 @@
 /**
+ * Copyright (C) 2026 SafePDFly contributors.
+ *
+ * This file is part of the SafePDFly engine, licensed under the GNU Affero
+ * General Public License v3.0 or later. See LICENSE in the engine package
+ * root for the full text.
+ */
+
+/**
  * T064 — client tests: fresh worker per run, checkpoint forwarding,
  * transfer of both buffers, and guaranteed termination (the T063 handoff
  * contract's other half: the transform worker is already dead before this
