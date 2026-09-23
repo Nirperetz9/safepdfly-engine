@@ -1,9 +1,8 @@
 /**
  * T059 — MuPDF.js engine adapter for the approved redaction policy.
  *
- * This module is the ONLY place in the redact path that imports "mupdf"
- * (same facade discipline as the classifier's readonly-facade; enforced by
- * adapter.test.ts). It applies the approved policy for every rectangle:
+ * This module and save.ts form the mutation facade: the ONLY places in the
+ * redact path that import "mupdf" (enforced by adapter.test.ts). It applies the approved policy for every rectangle:
  *
  * - text: REDACT_TEXT_REMOVE — glyphs destroyed, not overlaid;
  * - images: REDACT_IMAGE_PIXELS — covered pixels replaced with the fill;
@@ -22,6 +21,7 @@
 import { ColorSpace, Matrix, PDFDocument, PDFPage } from "mupdf";
 import type { TransformBackend } from "./handler.js";
 import type { SelfCheckStatus, TransformRect } from "./protocol.js";
+import { saveCandidate } from "./save.js";
 
 /** Open a document from raw bytes. Throws on corrupt/encrypted input. */
 function openPdfDocument(bytes: ArrayBuffer): PDFDocument {
@@ -108,12 +108,7 @@ export function createMuPdfBackend(): TransformBackend {
         doc = openPdfDocument(payload);
         const expectedPages = doc.countPages();
         applyRedactionPolicy(doc, rects);
-        // Full rewrite with garbage collection (T060 promotes this to
-        // save.ts). asUint8Array may view WASM memory, so copy before
-        // destroying the document.
-        const saved = new Uint8Array(
-          doc.saveToBuffer("garbage").asUint8Array(),
-        ).slice().buffer as ArrayBuffer;
+        const saved = saveCandidate(doc);
         const selfCheck = selfCheckRender(saved, expectedPages);
         return { bytes: saved, selfCheck };
       } finally {

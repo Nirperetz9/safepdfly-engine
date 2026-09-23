@@ -19,57 +19,17 @@
  * fixture ownership is still to be fixed deliberately).
  */
 import { describe, expect, it } from "vitest";
-import { readFileSync, readdirSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { ColorSpace, Matrix, PDFDocument } from "mupdf";
 import { createMuPdfBackend } from "./adapter.js";
 import { dispatchTransform } from "./handler.js";
-import type { TransformRect } from "./protocol.js";
-
-const here = dirname(fileURLToPath(import.meta.url));
-const fixturesDir = join(here, "..", "..", "..", "prototypes", "engine-validation", "fixtures");
-const workersDir = join(here, "..", "..", "app", "workers");
-
-interface ManifestEntry {
-  rects?: { page: number; rect: [number, number, number, number] }[];
-  must_remove?: string[];
-  must_keep?: string[];
-}
-const manifest = JSON.parse(
-  readFileSync(join(fixturesDir, "manifest.json"), "utf8"),
-) as Record<string, ManifestEntry>;
-
-function fixtureBytes(name: string): ArrayBuffer {
-  const buf = readFileSync(join(fixturesDir, name));
-  const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-  return ab as ArrayBuffer;
-}
-
-function manifestRects(name: string): TransformRect[] {
-  const entry = manifest[name];
-  if (!entry?.rects) throw new Error(`no rects for ${name}`);
-  return entry.rects.map((r) => ({
-    page: r.page,
-    x0: r.rect[0],
-    y0: r.rect[1],
-    x1: r.rect[2],
-    y1: r.rect[3],
-  }));
-}
-
-function sourcesIn(dir: string, prefix?: string): { name: string; text: string }[] {
-  return readdirSync(dir)
-    .filter((n) => n.endsWith(".ts") && !n.endsWith(".test.ts") && (!prefix || n.startsWith(prefix)))
-    .map((n) => ({
-      name: n,
-      // Strip comments: prose may discuss a forbidden concept, but code
-      // must never contain it.
-      text: readFileSync(join(dir, n), "utf8")
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/(^|\s)\/\/.*$/gm, "$1"),
-    }));
-}
+import {
+  fixtureBytes,
+  manifest,
+  manifestRects,
+  redactDir,
+  sourcesIn,
+  workersDir,
+} from "./test-utils.js";
 
 /** Render page 0 to an RGB pixmap at the given scale; y-down device space. */
 function renderInput(bytes: ArrayBuffer, scale: number): Pixmap {
@@ -120,15 +80,18 @@ function extractText(bytes: ArrayBuffer): string {
 }
 
 describe("mutation boundary", () => {
-  const redactSources = sourcesIn(here);
+  const redactSources = sourcesIn(redactDir);
   const entrySources = sourcesIn(workersDir, "redact-");
   const all = [...redactSources, ...entrySources];
 
-  it("only the adapter imports the mupdf module", () => {
+  it("only the mutation facade imports the mupdf module", () => {
     const importers = all
       .filter((s) => /from\s+["']mupdf["']/.test(s.text))
-      .map((s) => s.name);
-    expect(importers).toEqual(["adapter.ts"]);
+      .map((s) => s.name)
+      .sort();
+    // T059/T060: the mutation facade is exactly the adapter (policy) and the
+    // save path (serialization). Everything else stays engine-free.
+    expect(importers).toEqual(["adapter.ts", "save.ts"]);
   });
 
   it("no overlay or downgrade identifier appears in the redact path", () => {
