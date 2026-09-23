@@ -27,8 +27,9 @@ export type PageKind = "blank" | "text_based" | "scanned" | "hybrid";
 /**
  * Raster coverage at or above which a text-bearing page is treated as a
  * hybrid (OCR'd scan) rather than a text page with figures.
+ * Approved value: plan.md — "approximately 80% or more of the visible page".
  */
-export const HYBRID_IMAGE_COVERAGE = 0.9;
+export const HYBRID_IMAGE_COVERAGE = 0.8;
 
 export interface PageKindInput {
   readonly pageIndex: number;
