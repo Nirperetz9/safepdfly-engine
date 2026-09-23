@@ -53,3 +53,4 @@ export {
 export { VERIFY_TIMEOUT_MS, createVerifyTimeoutMs } from "./timeouts.js";
 export { runVerificationChecks } from "./checks.js";
 export { runDocumentChecks } from "./checks/document.js";
+export { runTextChecks, textItemBox, hasVisibleText, boxesOverlap } from "./checks/text.js";

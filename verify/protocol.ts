@@ -33,6 +33,7 @@ export type VerifyMessageType = (typeof VERIFY_MESSAGE_TYPES)[number];
  * use. Plain numbers (brands do not survive the worker boundary).
  */
 export interface VerifyRect {
+  /** 0-based page index (same convention as the transform rects). */
   readonly page: number;
   readonly x0: number;
   readonly y0: number;
@@ -91,6 +92,7 @@ export interface VerifyDocumentCheck {
 
 export interface VerifySelectionCheck {
   readonly selectionId: string;
+  /** 0-based page index of the marked rectangle. */
   readonly page: number;
   readonly number: number;
   readonly outcome: VerificationOutcome;

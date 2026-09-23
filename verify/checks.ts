@@ -8,15 +8,18 @@
  */
 import type { VerifyCheckContext, VerifyCheckRunner } from "./handler.js";
 import { runDocumentChecks } from "./checks/document.js";
+import { runTextChecks } from "./checks/text.js";
 
 export const runVerificationChecks: VerifyCheckRunner = async (
   ctx: VerifyCheckContext,
 ) => {
-  const documentChecks = await runDocumentChecks(ctx);
+  const [documentChecks, selectionChecks] = await Promise.all([
+    runDocumentChecks(ctx),
+    runTextChecks(ctx),
+  ]);
   return {
     documentChecks,
-    // T066 — text checks: no non-whitespace/selectable text in marked rects.
-    selectionChecks: [],
+    selectionChecks,
     // T067 — visible-content checks: uniform fill, no retained pixels,
     // no outside-mask damage.
     outsideMaskOutcome: "indeterminate",
