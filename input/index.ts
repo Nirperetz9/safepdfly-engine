@@ -12,6 +12,7 @@ export {
   type SourceReady,
   type SourceRejected,
   type SupportReasonCode,
+  type TextItem,
 } from "./protocol.js";
 export { createPdfJsEngine, type InputEngine } from "./engine.js";
 export { DescriptorError, extractDescriptors } from "./descriptors.js";
@@ -26,17 +27,17 @@ export {
   MAX_RENDER_SCALE,
   MIN_RENDER_SCALE,
   RENDER_POLICY_VERSION,
-  type PiiFailureCode,
   type RenderFailureCode,
   type RenderHandlerDeps,
   type RenderWorkerRequest,
   type RenderWorkerResponse,
+  type TextExtractFailureCode,
 } from "./render.js";
 export {
-  PiiScanError,
-  PiiScanSupersededError,
   RenderSupersededError,
   RenderWorkerClient,
+  TextExtractError,
+  TextExtractSupersededError,
   type MinimalRenderWorker,
   type RenderedPage,
 } from "./render-client.js";

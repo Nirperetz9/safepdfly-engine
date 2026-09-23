@@ -17,11 +17,11 @@
  */
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
-import { createPdfJsVerifyEngine } from "../../pdf/verify/engine.js";
-import { dispatchVerify } from "../../pdf/verify/handler.js";
-import { isVerifyOutbound } from "../../pdf/verify/protocol.js";
-import { runVerificationChecks } from "../../pdf/verify/checks.js";
-import { installNetworkGuard } from "../../privacy/network-guard.js";
+import { createPdfJsVerifyEngine } from "../verify/engine.js";
+import { dispatchVerify } from "../verify/handler.js";
+import { isVerifyOutbound } from "../verify/protocol.js";
+import { runVerificationChecks } from "../verify/checks.js";
+import { installNetworkGuard } from "../network-guard.js";
 
 // After local assets initialize, document processing cannot reach the
 // network — even if a future code path tried (T027, defense in depth).

@@ -26,7 +26,7 @@ const require = createRequire(import.meta.url);
 function bombBytes(): ArrayBuffer {
   const buf = readFileSync(
     require.resolve(
-      "../../test/fixtures/negative/decompression-bomb.pdf",
+      "../../src/test/fixtures/negative/decompression-bomb.pdf",
     ),
   );
   expect(buf.byteLength).toBeLessThan(1024 * 1024);

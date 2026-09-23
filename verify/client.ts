@@ -27,6 +27,14 @@ import {
 import { createVerifyTimeoutMs } from "./timeouts.js";
 import type { Sha256Digest } from "../geometry/index.js";
 
+/**
+ * T104 — open-core blessed surface: the host assembles the user-facing
+ * verification report from the worker's raw check results (T069). Exported
+ * from the client module so proprietary orchestration never imports engine
+ * internals directly.
+ */
+export { assembleVerificationReport } from "./assembler.js";
+
 export class VerifyWorkerError extends Error {
   readonly reason: VerifyFailureCode;
   constructor(reason: VerifyFailureCode) {

@@ -12,12 +12,11 @@
  */
 import {
   RENDER_POLICY_VERSION,
-  type PiiFailureCode,
-  type PiiKind,
-  type PiiWorkerCandidate,
   type RenderWorkerRequest,
   type RenderWorkerResponse,
+  type TextExtractFailureCode,
 } from "./render.js";
+import type { TextItem } from "./protocol.js";
 
 export interface MinimalRenderWorker {
   postMessage(message: unknown, transfer?: Transferable[]): void;
@@ -41,23 +40,23 @@ export class RenderSupersededError extends Error {
 }
 
 /**
- * T097 — the worker refused or failed the PII scan. The `code` is the
- * stable worker failure code (`no_text_layer`, `extraction_failed`, …);
- * callers surface a plain-language message, never the code alone.
+ * T104 — the worker refused or failed text extraction. The `code` is the
+ * stable worker failure code (`extraction_failed`, …); callers surface a
+ * plain-language message, never the code alone.
  */
-export class PiiScanError extends Error {
-  readonly code: PiiFailureCode;
-  constructor(code: PiiFailureCode) {
-    super(`pii scan failed: ${code}`);
-    this.name = "PiiScanError";
+export class TextExtractError extends Error {
+  readonly code: TextExtractFailureCode;
+  constructor(code: TextExtractFailureCode) {
+    super(`text extraction failed: ${code}`);
+    this.name = "TextExtractError";
     this.code = code;
   }
 }
 
-export class PiiScanSupersededError extends Error {
+export class TextExtractSupersededError extends Error {
   constructor() {
-    super("pii scan superseded by a newer scan");
-    this.name = "PiiScanSupersededError";
+    super("text extraction superseded by a newer request");
+    this.name = "TextExtractSupersededError";
   }
 }
 
@@ -66,19 +65,19 @@ interface PendingRender {
   readonly reject: (error: Error) => void;
 }
 
-interface PendingPiiScan {
-  readonly resolve: (candidates: readonly PiiWorkerCandidate[]) => void;
+interface PendingTextExtract {
+  readonly resolve: (items: readonly TextItem[]) => void;
   readonly reject: (error: Error) => void;
 }
 
-/** Per-page PII scan timeout: extraction + matching must not hang the UI. */
-const PII_SCAN_TIMEOUT_MS = 30_000;
+/** Per-page text-extraction timeout: extraction must not hang the UI. */
+const TEXT_EXTRACT_TIMEOUT_MS = 30_000;
 
 export class RenderWorkerClient {
   private worker: MinimalRenderWorker | null = null;
   private nextRequestId = 1;
   private pending: { requestId: number; pending: PendingRender } | null = null;
-  private piiPending: { requestId: number; pending: PendingPiiScan } | null = null;
+  private textPending: { requestId: number; pending: PendingTextExtract } | null = null;
   private opened = false;
   private closed = false;
 
@@ -152,7 +151,7 @@ export class RenderWorkerClient {
     if (this.closed) return;
     this.closed = true;
     this.failPending(new Error("render client closed"));
-    this.failPiiPending(new Error("render client closed"));
+    this.failTextPending(new Error("render client closed"));
     const worker = this.worker;
     this.worker = null;
     this.pending = null;
@@ -172,41 +171,38 @@ export class RenderWorkerClient {
     current?.pending.reject(error);
   }
 
-  private failPiiPending(error: Error): void {
-    const current = this.piiPending;
-    this.piiPending = null;
+  private failTextPending(error: Error): void {
+    const current = this.textPending;
+    this.textPending = null;
     current?.pending.reject(error);
   }
 
   /**
-   * T097 — scan one page's text layer for the given PII kinds.
-   * `pageIndex` is 0-based (UI convention); the worker uses 1-based page
-   * numbers. Resolves with candidate geometry only — matched text values
-   * never cross the worker boundary. Only the latest scan's promise
-   * settles; an earlier one rejects with PiiScanSupersededError. Rejects
-   * with PiiScanError carrying the worker's stable failure code
-   * (`no_text_layer`, `extraction_failed`, …) on a failed scan.
+   * T104 — extract one page's raw text items (text + geometry) for the
+   * proprietary PII worker. `pageIndex` is 0-based (UI convention); the
+   * worker uses 1-based page numbers. Only the latest extraction's promise
+   * settles; an earlier one rejects with TextExtractSupersededError.
+   * Rejects with TextExtractError carrying the worker's stable failure
+   * code (`extraction_failed`, …) on a failed extraction. The host relays
+   * the items to the PII worker; no PII matching happens here.
    */
-  findPiiPage(
-    pageIndex: number,
-    kinds: readonly PiiKind[],
-  ): Promise<readonly PiiWorkerCandidate[]> {
+  extractTextPage(pageIndex: number): Promise<readonly TextItem[]> {
     if (!this.opened || this.closed || this.worker === null) {
       return Promise.reject(new Error("render client is not open"));
     }
-    // Supersede any in-flight scan.
-    this.failPiiPending(new PiiScanSupersededError());
+    // Supersede any in-flight extraction.
+    this.failTextPending(new TextExtractSupersededError());
     const requestId = this.nextRequestId++;
-    const promise = new Promise<readonly PiiWorkerCandidate[]>((resolve, reject) => {
+    const promise = new Promise<readonly TextItem[]>((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.failPiiPending(new Error("pii scan timed out"));
-      }, PII_SCAN_TIMEOUT_MS);
-      this.piiPending = {
+        this.failTextPending(new Error("text extraction timed out"));
+      }, TEXT_EXTRACT_TIMEOUT_MS);
+      this.textPending = {
         requestId,
         pending: {
-          resolve: (candidates) => {
+          resolve: (items) => {
             clearTimeout(timer);
-            resolve(candidates);
+            resolve(items);
           },
           reject: (error) => {
             clearTimeout(timer);
@@ -216,10 +212,9 @@ export class RenderWorkerClient {
       };
     });
     this.worker.postMessage({
-      type: "FIND_PII_PAGE",
+      type: "EXTRACT_TEXT_PAGE",
       requestId,
       pageIndex: pageIndex + 1,
-      kinds,
     } satisfies RenderWorkerRequest);
     return promise;
   }
@@ -257,21 +252,21 @@ export class RenderWorkerClient {
         });
         return;
       }
-      case "PII_PAGE_FOUND": {
-        const current = this.piiPending;
+      case "TEXT_PAGE_EXTRACTED": {
+        const current = this.textPending;
         if (current === null || current.requestId !== response.requestId) {
-          // Stale scan: drop it; candidates belong to a superseded scan.
+          // Stale extraction: drop it; items belong to a superseded request.
           return;
         }
-        this.piiPending = null;
-        current.pending.resolve(response.candidates);
+        this.textPending = null;
+        current.pending.resolve(response.items);
         return;
       }
-      case "PII_PAGE_FAILED": {
-        const current = this.piiPending;
+      case "TEXT_PAGE_FAILED": {
+        const current = this.textPending;
         if (current === null || current.requestId !== response.requestId) return;
-        this.piiPending = null;
-        current.pending.reject(new PiiScanError(response.code));
+        this.textPending = null;
+        current.pending.reject(new TextExtractError(response.code));
         return;
       }
     }

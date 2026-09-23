@@ -49,3 +49,9 @@ export function isClassifyOutbound(value: unknown): value is ClassifyOutbound {
   }
   return false;
 }
+
+/**
+ * T104 — open-core blessed surface: the classify report is the worker's
+ * response payload, so its type is part of the protocol surface.
+ */
+export type { ClassifyReport } from "./classifier.js";

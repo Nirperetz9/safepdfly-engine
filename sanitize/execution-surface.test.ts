@@ -6,11 +6,11 @@
  * tree is pinned to have no execution surface for either:
  *
  *  1. Document JavaScript can never run: MuPDF.js ships with its JS engine
- *     off, and nothing in src may call `enableJS` (or register a JS event
- *     listener). PDF.js never executes document actions during page
- *     rendering — the pinned 6.3.289 bundle has no eval path over document
- *     content, and the only `getJSActions` call in src is the verifier's
- *     read-only name listing.
+ *     off, and nothing in src or engine may call `enableJS` (or register
+ *     a JS event listener). PDF.js never executes document actions during
+ *     page rendering — the pinned 6.3.289 bundle has no eval path over
+ *     document content, and the only `getJSActions` call in the tree is
+ *     the verifier's read-only name listing.
  *  2. Embedded files can never be opened or extracted: the only readers of
  *     the attachment surface are the classifier facade (presence detection)
  *     and the verifier engine (read-only name listing). Sanitization drops
@@ -25,7 +25,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function walk(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir, { withFileTypes: true })) {
@@ -43,7 +43,9 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const SOURCES = walk(join(ROOT, "src"));
+// T104 — the open engine package is scanned too: the execution-surface
+// ban covers engine/ as well as src/.
+const SOURCES = [...walk(join(ROOT, "src")), ...walk(join(ROOT, "engine"))];
 
 function hits(pattern: RegExp): string[] {
   const found: string[] = [];
@@ -65,21 +67,21 @@ describe("execution surface (T103)", () => {
   });
 
   it("getJSActions is read-only and lives only in the verifier engine", () => {
-    expect(hits(/\bgetJSActions\s*\(/)).toEqual(["src/pdf/verify/engine.ts"]);
+    expect(hits(/\bgetJSActions\s*\(/)).toEqual(["engine/verify/engine.ts"]);
   });
 
   it("embedded-file bytes are never opened or extracted", () => {
     // Detection (classifier facade) and read-only name listing (verifier
     // engine) are the only readers of the attachment surface.
     expect(hits(/\bgetEmbeddedFiles\s*\(/)).toEqual([
-      "src/pdf/classify-mupdf/readonly-facade.ts",
+      "engine/classify-mupdf/readonly-facade.ts",
     ]);
-    expect(hits(/\bgetAttachments\s*\(/)).toEqual(["src/pdf/verify/engine.ts"]);
+    expect(hits(/\bgetAttachments\s*\(/)).toEqual(["engine/verify/engine.ts"]);
   });
 
   it("sanitization drops the layers from the object model without extraction", () => {
     const text = readFileSync(
-      join(ROOT, "src/pdf/sanitize/sanitize.ts"),
+      join(ROOT, "engine/sanitize/sanitize.ts"),
       "utf8",
     );
     for (const key of ["EmbeddedFiles", "JavaScript", "OpenAction", "AA"]) {

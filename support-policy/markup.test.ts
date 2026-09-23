@@ -175,7 +175,7 @@ describe("evidence plumbing", () => {
 
   it("ordinary documents are clear", async () => {
     const url = new URL(
-      "../../test/fixtures/text/en-basic.pdf",
+      "../../src/test/fixtures/text/en-basic.pdf",
       import.meta.url,
     );
     const buf = readFileSync(url);

@@ -11,11 +11,11 @@
  * It is never reused as the transformation worker: it imports nothing from
  * the input or transform paths (enforced by classify.test.ts).
  */
-import { installNetworkGuard } from "../../privacy/network-guard.js";
-import { classifySource, ClassifyError } from "../../pdf/classify-mupdf/classifier.js";
-import { openDocumentReadOnly } from "../../pdf/classify-mupdf/readonly-facade.js";
-import { isClassifyOutbound } from "../../pdf/classify-mupdf/protocol.js";
-import type { ClassifyFailureCode } from "../../pdf/classify-mupdf/classifier.js";
+import { installNetworkGuard } from "../network-guard.js";
+import { classifySource, ClassifyError } from "../classify-mupdf/classifier.js";
+import { openDocumentReadOnly } from "../classify-mupdf/readonly-facade.js";
+import { isClassifyOutbound } from "../classify-mupdf/protocol.js";
+import type { ClassifyFailureCode } from "../classify-mupdf/classifier.js";
 
 installNetworkGuard();
 

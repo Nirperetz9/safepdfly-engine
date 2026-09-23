@@ -9,9 +9,9 @@
  */
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import pdfWorkerUrl from "pdfjs-dist/legacy/build/pdf.worker.mjs?url";
-import { createPdfJsEngine } from "../../pdf/input/engine.js";
-import { createRenderHandler, type RenderWorkerRequest } from "../../pdf/input/render.js";
-import { installNetworkGuard } from "../../privacy/network-guard.js";
+import { createPdfJsEngine } from "../input/engine.js";
+import { createRenderHandler, type RenderWorkerRequest } from "../input/render.js";
+import { installNetworkGuard } from "../network-guard.js";
 
 const engine = createPdfJsEngine(pdfjs, { workerSrc: pdfWorkerUrl });
 

@@ -146,8 +146,7 @@ describe("render worker protocol", () => {
   });
 });
 
-describe("FIND_PII_PAGE (T097)", () => {
-  function textItem(str: string, x: number, y: number): {
+describe("FIND_PII_PAGE (T097)", () => {  function textItem(str: string, x: number, y: number): {
     str: string;
     transform: [number, number, number, number, number, number];
     width: number;
@@ -156,7 +155,7 @@ describe("FIND_PII_PAGE (T097)", () => {
     return { str, transform: [6, 0, 0, 10, x, y], width: str.length * 6, hasEOL: false };
   }
 
-  function piiHandler(
+  function textHandler(
     pages: Array<ReturnType<typeof textItem>[]>,
     opts: { failText?: boolean } = {},
   ) {
@@ -182,84 +181,63 @@ describe("FIND_PII_PAGE (T097)", () => {
     return createRenderHandler({ engine });
   }
 
-  const SCAN = (pageIndex: number, kinds: readonly string[] = ["id-number"]) =>
+  const EXTRACT = (pageIndex: number) =>
     ({
-      type: "FIND_PII_PAGE",
+      type: "EXTRACT_TEXT_PAGE",
       requestId: 7,
       pageIndex,
-      kinds,
     }) as unknown as RenderWorkerRequest;
 
-  it("returns candidate geometry for a matching page", async () => {
-    const h = piiHandler([[textItem("תעודת זהות: 123456782.", 10, 700)]]);
+  it("returns the page's raw text items for the PII worker relay", async () => {
+    const h = textHandler([[textItem("hello world", 10, 700)]]);
     await h.dispatch(OPEN, new ArrayBuffer(8));
-    const res = await h.dispatch(SCAN(1), undefined);
-    expect(res.type).toBe("PII_PAGE_FOUND");
-    if (res.type !== "PII_PAGE_FOUND") return;
+    const res = await h.dispatch(EXTRACT(1), undefined);
+    expect(res.type).toBe("TEXT_PAGE_EXTRACTED");
+    if (res.type !== "TEXT_PAGE_EXTRACTED") return;
     expect(res.requestId).toBe(7);
     expect(res.pageIndex).toBe(1);
-    expect(res.candidates).toHaveLength(1);
-    expect(res.candidates[0]!.kind).toBe("id-number");
-    // Geometry only: the matched value itself never crosses the boundary.
-    expect(JSON.stringify(res)).not.toContain("123456782");
-    const c = res.candidates[0]!;
-    expect(c.x1).toBeGreaterThan(c.x0);
-    expect(c.y1).toBeGreaterThan(c.y0);
+    expect(res.items).toHaveLength(1);
+    expect(res.items[0]!.str).toBe("hello world");
   });
 
-  it("returns no candidates when nothing matches", async () => {
-    const h = piiHandler([[textItem("no personal details here", 10, 700)]]);
+  it("returns an empty item list when the page has no text (no silent skip)", async () => {
+    const h = textHandler([[]]);
     await h.dispatch(OPEN, new ArrayBuffer(8));
-    const res = await h.dispatch(SCAN(1), undefined);
-    expect(res).toMatchObject({ type: "PII_PAGE_FOUND", candidates: [] });
-  });
-
-  it("fails closed with no_text_layer when the page has no usable text", async () => {
-    const h = piiHandler([[textItem("   ", 10, 700)]]);
-    await h.dispatch(OPEN, new ArrayBuffer(8));
-    const res = await h.dispatch(SCAN(1), undefined);
-    expect(res).toMatchObject({ type: "PII_PAGE_FAILED", code: "no_text_layer" });
+    const res = await h.dispatch(EXTRACT(1), undefined);
+    expect(res).toMatchObject({ type: "TEXT_PAGE_EXTRACTED", items: [] });
   });
 
   it("fails closed with extraction_failed when text extraction throws", async () => {
-    const h = piiHandler([[]], { failText: true });
+    const h = textHandler([[]], { failText: true });
     await h.dispatch(OPEN, new ArrayBuffer(8));
-    const res = await h.dispatch(SCAN(1), undefined);
-    expect(res).toMatchObject({ type: "PII_PAGE_FAILED", code: "extraction_failed" });
+    const res = await h.dispatch(EXTRACT(1), undefined);
+    expect(res).toMatchObject({ type: "TEXT_PAGE_FAILED", code: "extraction_failed" });
     expect(JSON.stringify(res)).not.toContain("boom");
   });
 
-  it("fails closed on bad page numbers and bad kind lists", async () => {
-    const h = piiHandler([[textItem("hello", 10, 700)]]);
+  it("fails closed on bad page numbers", async () => {
+    const h = textHandler([[textItem("hello", 10, 700)]]);
     await h.dispatch(OPEN, new ArrayBuffer(8));
-    expect(await h.dispatch(SCAN(0), undefined)).toMatchObject({
-      type: "PII_PAGE_FAILED",
+    expect(await h.dispatch(EXTRACT(0), undefined)).toMatchObject({
+      type: "TEXT_PAGE_FAILED",
       code: "invalid_request",
     });
-    expect(await h.dispatch(SCAN(5), undefined)).toMatchObject({
-      type: "PII_PAGE_FAILED",
+    expect(await h.dispatch(EXTRACT(5), undefined)).toMatchObject({
+      type: "TEXT_PAGE_FAILED",
       code: "invalid_request",
-    });
-    expect(await h.dispatch(SCAN(1, []), undefined)).toMatchObject({
-      type: "PII_PAGE_FAILED",
-      code: "invalid_kinds",
-    });
-    expect(await h.dispatch(SCAN(1, ["ssn"]), undefined)).toMatchObject({
-      type: "PII_PAGE_FAILED",
-      code: "invalid_kinds",
     });
   });
 
   it("fails closed before open and after close", async () => {
-    const h = piiHandler([[textItem("hello", 10, 700)]]);
-    expect(await h.dispatch(SCAN(1), undefined)).toMatchObject({
-      type: "PII_PAGE_FAILED",
+    const h = textHandler([[textItem("hello", 10, 700)]]);
+    expect(await h.dispatch(EXTRACT(1), undefined)).toMatchObject({
+      type: "TEXT_PAGE_FAILED",
       code: "not_open",
     });
     await h.dispatch(OPEN, new ArrayBuffer(8));
     await h.dispatch({ type: "CLOSE_RENDERER" }, undefined);
-    expect(await h.dispatch(SCAN(1), undefined)).toMatchObject({
-      type: "PII_PAGE_FAILED",
+    expect(await h.dispatch(EXTRACT(1), undefined)).toMatchObject({
+      type: "TEXT_PAGE_FAILED",
       code: "closed",
     });
   });

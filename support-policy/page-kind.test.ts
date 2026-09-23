@@ -24,7 +24,7 @@ const require = createRequire(import.meta.url);
 
 function fixture(name: string): ArrayBuffer {
   const url = new URL(
-    `../../test/fixtures/${name}`,
+    `../../src/test/fixtures/${name}`,
     import.meta.url,
   );
   const buf = readFileSync(url);

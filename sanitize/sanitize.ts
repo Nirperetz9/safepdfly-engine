@@ -24,7 +24,7 @@
  * candidate, no grant.
  *
  * Structural typing only: this module never imports "mupdf". The mutation
- * boundary stays in src/pdf/redact/adapter.ts, which passes the real
+ * boundary stays in engine/redact/adapter.ts, which passes the real
  * MuPDF document in (structurally compatible).
  */
 

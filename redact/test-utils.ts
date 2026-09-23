@@ -13,8 +13,8 @@ import { fileURLToPath } from "node:url";
 import type { TransformRect } from "./protocol.js";
 
 export const redactDir = dirname(fileURLToPath(import.meta.url));
-export const fixturesDir = join(redactDir, "..", "..", "test", "fixtures");
-export const workersDir = join(redactDir, "..", "..", "app", "workers");
+export const fixturesDir = join(redactDir, "..", "..", "src", "test", "fixtures");
+export const workersDir = join(redactDir, "..", "..", "src", "app", "workers");
 
 interface ManifestEntry {
   rects?: { page: number; rect: [number, number, number, number] }[];

@@ -8,7 +8,7 @@
  * origin only, never a CDN.
  */
 import type * as pdfjsTypes from "pdfjs-dist/legacy/build/pdf.mjs";
-import type { PiiTextItem } from "../pii/index.js";
+import type { TextItem } from "./protocol.js";
 
 export type PdfJsModule = typeof pdfjsTypes;
 
@@ -21,11 +21,12 @@ export interface InputEnginePage {
   /** True when any non-whitespace text item exists on the page. */
   hasNonWhitespaceText(): Promise<boolean>;
   /**
-   * T097 — Raw text items in default user space (y-up) for the PII
-   * finder. Runs in the render worker; matched values never cross to the
-   * host — the worker returns candidate geometry only.
+   * T104 — raw text items in default user space (y-up) for the proprietary
+   * PII worker (see src/pdf/pii). Runs in the render worker; the host
+   * relays the items to the PII worker, which returns candidate geometry
+   * only — matched values never leave the PII worker.
    */
-  textItems(): Promise<readonly PiiTextItem[]>;
+  textItems(): Promise<readonly TextItem[]>;
   /**
    * T040 — Number of content-stream operators on the page, for the
    * per-page operator budget guard. A full parse; the worker time budget
@@ -106,9 +107,9 @@ class PdfJsEnginePage implements InputEnginePage {
     return ops.fnArray.length;
   }
 
-  async textItems(): Promise<readonly PiiTextItem[]> {
+  async textItems(): Promise<readonly TextItem[]> {
     const content = await this.page.getTextContent();
-    const items: PiiTextItem[] = [];
+    const items: TextItem[] = [];
     for (const raw of content.items) {
       if (!("str" in raw) || typeof raw.str !== "string") continue;
       const matrix = toMatrix6((raw as { transform?: unknown }).transform);

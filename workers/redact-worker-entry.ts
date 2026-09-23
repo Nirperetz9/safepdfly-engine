@@ -12,10 +12,10 @@
  * host terminates it after the response, so it can never be reused as the
  * verification worker (T063).
  */
-import { installNetworkGuard } from "../../privacy/network-guard.js";
-import { createMuPdfBackend } from "../../pdf/redact/adapter.js";
-import { dispatchTransform } from "../../pdf/redact/handler.js";
-import { isTransformOutbound } from "../../pdf/redact/protocol.js";
+import { installNetworkGuard } from "../network-guard.js";
+import { createMuPdfBackend } from "../redact/adapter.js";
+import { dispatchTransform } from "../redact/handler.js";
+import { isTransformOutbound } from "../redact/protocol.js";
 
 installNetworkGuard();
 

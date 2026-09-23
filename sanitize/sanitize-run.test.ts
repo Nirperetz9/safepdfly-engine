@@ -14,7 +14,7 @@ import { describe, expect, it } from "vitest";
 import { createRequire } from "node:module";
 import * as pdfjs from "pdfjs-dist/legacy/build/pdf.mjs";
 import { PDFDocument } from "mupdf";
-import { installNodeCanvas } from "../../test/corpus/node-canvas.js";
+import { installNodeCanvas } from "../../src/test/corpus/node-canvas.js";
 import { createMuPdfBackend } from "../redact/adapter.js";
 import { dispatchTransform } from "../redact/handler.js";
 import {

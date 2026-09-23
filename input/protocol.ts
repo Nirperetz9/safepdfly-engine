@@ -65,3 +65,19 @@ export function isOpenSourceRequest(value: unknown): value is OpenSourceRequest 
     (value as { type?: unknown }).type === "OPEN_SOURCE"
   );
 }
+
+/**
+ * T104 — one text item in default user space (y-up), as produced by PDF.js
+ * getTextContent. The render worker exposes these through EXTRACT_TEXT_PAGE
+ * (see input/render.ts); the proprietary PII worker consumes them. The shape
+ * is identical to the proprietary `PiiTextItem` so the host can relay items
+ * structurally without conversion.
+ */
+export interface TextItem {
+  readonly str: string;
+  /** PDF.js text transform [a, b, c, d, e, f]. */
+  readonly transform: readonly [number, number, number, number, number, number];
+  /** Advance in default user space along the text direction. */
+  readonly width: number;
+  readonly hasEOL: boolean;
+}

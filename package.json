@@ -1,0 +1,12 @@
+{
+  "description": "SafePDFly open-core document engine: browser-side PDF input, classification, redaction, sanitization, and verification workers.",
+  "license": "AGPL-3.0-or-later",
+  "name": "@safepdfly/engine",
+  "peerDependencies": {
+    "mupdf": "1.28.1",
+    "pdfjs-dist": "6.3.289"
+  },
+  "private": true,
+  "type": "module",
+  "version": "0.1.0"
+}

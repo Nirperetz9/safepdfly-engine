@@ -18,11 +18,12 @@ import { openDocumentReadOnly } from "./readonly-facade.js";
 import { classifyInWorker } from "./client.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const workersDir = join(here, "..", "..", "app", "workers");
+// T104 — worker entries moved to the top-level engine package.
+const workersDir = join(here, "..", "workers");
 
 function fixture(name: string): ArrayBuffer {
   const url = new URL(
-    `../../test/fixtures/${name}`,
+    `../../src/test/fixtures/${name}`,
     import.meta.url,
   );
   const buf = readFileSync(url);

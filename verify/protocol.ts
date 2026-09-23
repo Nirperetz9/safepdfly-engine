@@ -249,3 +249,19 @@ export function isVerifyOutbound(value: unknown): value is VerifyOutbound {
     return isVerifyFailureCode((value as Record<string, unknown>).reason);
   return false;
 }
+
+/**
+ * T104 — open-core blessed surface: pure wire-rect conversion the host
+ * orchestration needs (TransformRect → VerifyRect). Re-exported here so
+ * proprietary code never imports engine internals directly.
+ */
+export { toVerifyRectFromTransform } from "./rects.js";
+
+/**
+ * T104 — text-geometry helpers and engine types the proprietary
+ * lie-detector composes with its own pipeline. Re-exported through the
+ * blessed protocol surface so the proprietary side never imports engine
+ * internals directly.
+ */
+export { boxesOverlap, hasVisibleText, textItemBox, type TextBox } from "./checks/text.js";
+export type { PdfJsModule, VerifyPixels } from "./engine.js";

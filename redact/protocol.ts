@@ -193,3 +193,14 @@ export function isTransformOutbound(value: unknown): value is TransformOutbound 
   }
   return false;
 }
+
+/**
+ * T104 — open-core blessed surface. These pure host-side helpers are part
+ * of the engine's public API so proprietary orchestration never imports
+ * engine internals directly:
+ * - `toTransformRect`: canonical selection → wire TransformRect.
+ * - `fingerprintPageGeometry`: deterministic page-geometry fingerprint.
+ */
+export { toTransformRect } from "./rects.js";
+export { fingerprintPageGeometry } from "./preconditions.js";
+export { checkTransformPreconditions } from "./preconditions.js";
