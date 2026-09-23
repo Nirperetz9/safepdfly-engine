@@ -1,8 +1,9 @@
 /**
  * T059 — MuPDF.js engine adapter for the approved redaction policy.
  *
- * This module and save.ts form the mutation facade: the ONLY places in the
- * redact path that import "mupdf" (enforced by adapter.test.ts). It applies the approved policy for every rectangle:
+ * This module with save.ts and selfcheck.ts forms the mutation facade: the
+ * ONLY places in the redact path that import "mupdf" (enforced by
+ * adapter.test.ts). It applies the approved policy for every rectangle:
  *
  * - text: REDACT_TEXT_REMOVE — glyphs destroyed, not overlaid;
  * - images: REDACT_IMAGE_PIXELS — covered pixels replaced with the fill;
@@ -18,10 +19,11 @@
  * and the worker boundary (T058) maps it to TRANSFORM_FAILED. The
  * application never downgrades to a cosmetic rectangle.
  */
-import { ColorSpace, Matrix, PDFDocument, PDFPage } from "mupdf";
+import { PDFDocument, PDFPage } from "mupdf";
 import type { TransformBackend } from "./handler.js";
-import type { SelfCheckStatus, TransformRect } from "./protocol.js";
+import type { TransformRect } from "./protocol.js";
 import { saveCandidate } from "./save.js";
+import { runSelfCheck } from "./selfcheck.js";
 
 /** Open a document from raw bytes. Throws on corrupt/encrypted input. */
 function openPdfDocument(bytes: ArrayBuffer): PDFDocument {
@@ -75,30 +77,6 @@ export function applyRedactionPolicy(
   }
 }
 
-/**
- * Internal self-check (T062 will promote this to its own module): the
- * candidate must re-parse, keep its page count, and render its first page.
- * This is a sanity check on the transformation only — never a safety verdict.
- */
-function selfCheckRender(bytes: ArrayBuffer, expectedPages: number): SelfCheckStatus {
-  let doc: PDFDocument | null = null;
-  try {
-    doc = openPdfDocument(bytes);
-    if (doc.countPages() !== expectedPages) return "failed";
-    const pix = doc
-      .loadPage(0)
-      .toPixmap(Matrix.scale(0.5, 0.5), ColorSpace.DeviceRGB);
-    // Touch the pixels so a broken render surface cannot pass silently.
-    if (pix.getPixels().length === 0) return "failed";
-    pix.destroy();
-    return "ok";
-  } catch {
-    return "failed";
-  } finally {
-    doc?.destroy();
-  }
-}
-
 /** Production backend: open, apply policy, full-rewrite save, self-check. */
 export function createMuPdfBackend(): TransformBackend {
   return {
@@ -109,7 +87,7 @@ export function createMuPdfBackend(): TransformBackend {
         const expectedPages = doc.countPages();
         applyRedactionPolicy(doc, rects);
         const saved = saveCandidate(doc);
-        const selfCheck = selfCheckRender(saved, expectedPages);
+        const selfCheck = runSelfCheck(saved, expectedPages);
         return { bytes: saved, selfCheck };
       } finally {
         doc?.destroy();

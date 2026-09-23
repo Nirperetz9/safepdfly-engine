@@ -89,9 +89,10 @@ describe("mutation boundary", () => {
       .filter((s) => /from\s+["']mupdf["']/.test(s.text))
       .map((s) => s.name)
       .sort();
-    // T059/T060: the mutation facade is exactly the adapter (policy) and the
-    // save path (serialization). Everything else stays engine-free.
-    expect(importers).toEqual(["adapter.ts", "save.ts"]);
+    // T059/T060/T062: the mutation facade is exactly the adapter (policy),
+    // the save path (serialization), and the self-check (re-parse + render).
+    // Everything else stays engine-free.
+    expect(importers).toEqual(["adapter.ts", "save.ts", "selfcheck.ts"]);
   });
 
   it("no overlay or downgrade identifier appears in the redact path", () => {
