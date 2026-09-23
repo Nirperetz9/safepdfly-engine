@@ -28,9 +28,11 @@ export type VerifyMessageType = (typeof VERIFY_MESSAGE_TYPES)[number];
 
 /**
  * Plain-data redaction rectangle in canonical PDF space: default user
- * space, y-up, origin at MediaBox origin — the same space the transform
- * worker applied redactions in, and the same space PDF.js text coordinates
- * use. Plain numbers (brands do not survive the worker boundary).
+ * space, y-up, origin at MediaBox origin — the same space PDF.js text
+ * coordinates use. The transform worker applies redactions in viewport
+ * points (y-down); VerifyRects are derived from those applied rects
+ * through the approved viewport→PDF conversion (T024, see
+ * verify/rects.ts `toVerifyRectFromTransform`) — never an ad-hoc flip.
  */
 export interface VerifyRect {
   /** 0-based page index (same convention as the transform rects). */

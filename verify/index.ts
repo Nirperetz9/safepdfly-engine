@@ -53,6 +53,10 @@ export {
 } from "./engine.js";
 export { VERIFY_TIMEOUT_MS, createVerifyTimeoutMs } from "./timeouts.js";
 export { runVerificationChecks } from "./checks.js";
+export {
+  toVerifyRectFromTransform,
+  type VerifyRectSelection,
+} from "./rects.js";
 export { runDocumentChecks } from "./checks/document.js";
 export { runTextChecks, textItemBox, hasVisibleText, normalizeTextValue, boxesOverlap } from "./checks/text.js";
 export {

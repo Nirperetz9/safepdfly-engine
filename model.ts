@@ -32,6 +32,20 @@ export type WorkflowState =
   | "reset";
 
 export type SupportVerdict = "checking" | "supported" | "rejected" | "indeterminate";
+
+/**
+ * T093 — the support evidence input checking actually produced on its
+ * success path: the per-engine verdicts (the PDF.js input worker opened
+ * the source; the MuPDF read-only classifier completed) and the explicit
+ * unsupported-feature adjudication over the classifier evidence. Retained
+ * on the session so the pre-transform precondition (T061) consumes the
+ * real evidence rather than a reconstruction.
+ */
+export interface InputSupportEvidence {
+  readonly mupdf: "supported";
+  readonly pdfjs: "supported";
+  readonly unsupportedFeatureFound: boolean;
+}
 export type PageClassification =
   | "blank"
   | "text_based"
@@ -66,6 +80,20 @@ export interface DocumentSession {
   readonly pageCount: number;
   readonly support: SupportVerdict;
   readonly pageDescriptors: readonly PageDescriptor[];
+  /**
+   * T093 — page-geometry fingerprints captured at classification time
+   * (when the descriptors were produced). The pre-transform precondition
+   * compares these against freshly recomputed fingerprints, so any
+   * descriptor drift between input and the run fails closed. Parallel to
+   * pageDescriptors; empty only for rejected stub sessions.
+   */
+  readonly classificationFingerprints: readonly string[];
+  /**
+   * T093 — the per-engine support verdicts and unsupported-feature
+   * adjudication from input checking (see InputSupportEvidence). Null
+   * for rejected stub sessions, which never reach a run.
+   */
+  readonly supportEvidence: InputSupportEvidence | null;
   readonly lifecycle: WorkflowState;
 }
 

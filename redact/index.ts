@@ -24,6 +24,7 @@ export {
   TRANSFORM_POLICY_VERSIONS,
   type TransformBackend,
 } from "./handler.js";
+export { toTransformRect } from "./rects.js";
 export {
   applyRedactionsInWorker,
   TransformWorkerError,
@@ -32,3 +33,8 @@ export {
   type TransformWorkerClientDeps,
 } from "./client.js";
 export { TRANSFORM_TIMEOUT_MS, createTransformTimeoutMs } from "./timeouts.js";
+export {
+  checkTransformPreconditions,
+  fingerprintPageGeometry,
+  type TransformPreconditionInput,
+} from "./preconditions.js";
