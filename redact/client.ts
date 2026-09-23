@@ -51,8 +51,15 @@ export interface TransformCandidate {
 }
 
 /**
- * Run one transformation in a fresh worker. The worker is always terminated
- * afterwards — before any verification worker may be created (T063).
+ * Run one transformation in a fresh worker. T063 handoff contract: the
+ * worker is ALWAYS terminated in `finally`, before this promise settles —
+ * on success, on engine failure, on protocol violation, and on timeout
+ * (mid-flight interruption). Any caller that awaits the transformation
+ * therefore observes a dead transform worker before it can create the
+ * verification worker. The worker's document, source copy, and WASM-side
+ * state die with it; the host's source copy was transferred (neutered) on
+ * postMessage. A transformation-engine handle can never reach the
+ * verification worker because none survives this call.
  */
 export async function applyRedactionsInWorker(
   request: TransformRequest,
