@@ -36,6 +36,7 @@ function request(payload?: ArrayBuffer): ApplyRedactionsMessage {
       redaction: REDACTION_POLICY_VERSION,
       save: SAVE_POLICY_VERSION,
     },
+    sanitize: false,
   };
 }
 
@@ -124,7 +125,7 @@ function fakeWorker(): FakeWorker {
 }
 
 function clientRequest(): TransformRequest {
-  return { bytes: new ArrayBuffer(16), rects: RECTS };
+  return { bytes: new ArrayBuffer(16), rects: RECTS, sanitize: false };
 }
 
 describe("applyRedactionsInWorker", () => {

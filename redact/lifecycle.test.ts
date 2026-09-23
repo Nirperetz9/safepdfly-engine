@@ -56,7 +56,7 @@ describe("T063 transform worker termination before verification", () => {
       transformWorker.postMessage = () => {};
 
       const pending = applyRedactionsInWorker(
-        { bytes: new ArrayBuffer(8), rects: RECTS },
+        { bytes: new ArrayBuffer(8), rects: RECTS, sanitize: false },
         { createWorker: () => transformWorker as unknown as Worker },
       );
       const assertion = expect(pending).rejects.toMatchObject({
@@ -96,7 +96,7 @@ describe("T063 transform worker termination before verification", () => {
       events.push("transform-terminated");
     });
     const pending = applyRedactionsInWorker(
-      { bytes: new ArrayBuffer(8), rects: RECTS },
+      { bytes: new ArrayBuffer(8), rects: RECTS, sanitize: false },
       { createWorker: () => transformWorker as unknown as Worker },
     );
     const payload = new ArrayBuffer(4);

@@ -40,6 +40,7 @@ function policyMessage(payload: ArrayBuffer) {
       redaction: REDACTION_POLICY_VERSION,
       save: SAVE_POLICY_VERSION,
     },
+    sanitize: false,
   };
 }
 
@@ -48,6 +49,7 @@ async function realCandidate(): Promise<ArrayBuffer> {
   const { bytes, selfCheck } = await backend.apply(
     fixtureBytes(FIXTURE),
     manifestRects(FIXTURE),
+    false,
   );
   expect(selfCheck).toBe("ok");
   return bytes;

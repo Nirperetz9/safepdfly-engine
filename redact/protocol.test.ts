@@ -26,6 +26,7 @@ function validRequest(): ApplyRedactionsMessage {
       redaction: REDACTION_POLICY_VERSION,
       save: SAVE_POLICY_VERSION,
     },
+    sanitize: false,
   };
 }
 
@@ -45,6 +46,20 @@ describe("APPLY_REDACTIONS validation", () => {
   it("rejects a non-transferred payload", () => {
     const m = { ...validRequest(), payload: [1, 2, 3] };
     expect(isApplyRedactionsMessage(m)).toBe(false);
+  });
+
+  it("T099: rejects a missing or non-boolean sanitize flag", () => {
+    const { sanitize: _dropped, ...withoutFlag } = validRequest();
+    expect(isApplyRedactionsMessage(withoutFlag)).toBe(false);
+    expect(
+      isApplyRedactionsMessage({ ...validRequest(), sanitize: "yes" }),
+    ).toBe(false);
+    expect(isApplyRedactionsMessage({ ...validRequest(), sanitize: 1 })).toBe(
+      false,
+    );
+    expect(isApplyRedactionsMessage({ ...validRequest(), sanitize: true })).toBe(
+      true,
+    );
   });
 
   it("rejects empty or degenerate rectangles", () => {

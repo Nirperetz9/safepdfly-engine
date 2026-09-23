@@ -39,6 +39,12 @@ export interface TransformRequest {
   /** Caller-owned source copy; transferred to the worker. */
   bytes: ArrayBuffer;
   rects: readonly TransformRect[];
+  /**
+   * T099 — explicit opt-in for metadata & hidden-layer sanitization.
+   * The orchestration sets this from the user's toggle ANDed with the
+   * Pro availability seam; the worker strips nothing unless it is true.
+   */
+  sanitize: boolean;
 }
 
 /** The candidate as the host receives it: bytes + identity, no URL, no verdict. */
@@ -102,6 +108,7 @@ export async function applyRedactionsInWorker(
           payload: request.bytes,
           rects: request.rects,
           policy: { ...TRANSFORM_POLICY_VERSIONS },
+          sanitize: request.sanitize,
         },
         [request.bytes],
       );

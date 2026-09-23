@@ -146,7 +146,7 @@ describe("ported T009 — text redaction", () => {
     it(`destroys marked text and keeps public text: ${name}`, async () => {
       const entry = manifest[name]!;
       const backend = createMuPdfBackend();
-      const { bytes, selfCheck } = await backend.apply(fixtureBytes(name), manifestRects(name));
+      const { bytes, selfCheck } = await backend.apply(fixtureBytes(name), manifestRects(name), false);
       expect(selfCheck).toBe("ok");
       const text = extractText(bytes);
       for (const secret of entry.must_remove ?? []) {
@@ -173,7 +173,7 @@ describe("ported T010 — image redaction", () => {
     const rect = manifestRects(name)[0]!;
     const backend = createMuPdfBackend();
     const input = fixtureBytes(name);
-    const { bytes } = await backend.apply(input, [rect]);
+    const { bytes } = await backend.apply(input, [rect], false);
 
     const scale = 2;
     const after = renderInput(bytes, scale);
@@ -240,7 +240,7 @@ describe("T094 fail-closed — unclippable vector content", () => {
     const pdf = buildPdf("/GS1 gs\n10 10 m 100 10 l S\n");
     const rects = [{ page: 0, x0: 0, y0: 770, x1: 200, y1: 792 }];
     const backend = createMuPdfBackend();
-    await expect(backend.apply(pdf, rects)).rejects.toThrow();
+    await expect(backend.apply(pdf, rects, false)).rejects.toThrow();
     const out = await dispatchTransform(
       {
         type: "APPLY_REDACTIONS",
@@ -251,6 +251,7 @@ describe("T094 fail-closed — unclippable vector content", () => {
           redaction: "redaction-policy/2",
           save: "save/garbage+gc/1",
         },
+        sanitize: false,
       },
       backend,
     );
@@ -265,9 +266,11 @@ describe("T094 fail-closed — unclippable vector content", () => {
     // the mark outside the page and throw (or clip the wrong region).
     const pdf = buildPdf("0 0 0 RG\n10 350 m 190 350 l S\n", " /Rotate 90");
     const backend = createMuPdfBackend();
-    const candidate = await backend.apply(pdf, [
-      { page: 0, x0: 340, y0: 50, x1: 360, y1: 150 },
-    ]);
+    const candidate = await backend.apply(
+      pdf,
+      [{ page: 0, x0: 340, y0: 50, x1: 360, y1: 150 }],
+      false,
+    );
     const text = readContentStream(candidate.bytes);
     expect(text).toContain("10 350 m 50 350 l S");
     expect(text).toContain("150 350 m 190 350 l S");
@@ -280,7 +283,7 @@ describe("ported T011 — vector redaction (T094 clip-instead-of-remove)", () =>
     const name = "graphics/vector-crossing.pdf";
     const backend = createMuPdfBackend();
     const input = fixtureBytes(name);
-    const { bytes } = await backend.apply(input, manifestRects(name));
+    const { bytes } = await backend.apply(input, manifestRects(name), false);
 
     const scale = 2;
     const before = renderInput(input, scale);
@@ -374,6 +377,7 @@ describe("never downgrades to an overlay", () => {
           redaction: "redaction-policy/2",
           save: "save/garbage+gc/1",
         },
+        sanitize: false,
       },
       backend,
     );

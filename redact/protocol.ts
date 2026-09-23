@@ -60,6 +60,14 @@ export interface ApplyRedactionsMessage {
   rects: readonly TransformRect[];
   /** Exact policy versions the transformation must apply. */
   policy: TransformPolicyVersions;
+  /**
+   * T099 — explicit opt-in: strip document Info, XMP metadata, embedded
+   * files, and document-level scripts/actions as part of the transform
+   * (before the full-rewrite save). Never defaulted: the host sets it
+   * from the user's choice ANDed with the Pro availability seam, and the
+   * worker refuses any message that does not carry an explicit boolean.
+   */
+  sanitize: boolean;
 }
 
 /** Internal self-check outcome (T062): the candidate re-parses and renders. */
@@ -159,7 +167,10 @@ export function isApplyRedactionsMessage(value: unknown): value is ApplyRedactio
   if (!(m.payload instanceof ArrayBuffer)) return false;
   if (!Array.isArray(m.rects) || m.rects.length === 0) return false;
   if (!m.rects.every(isValidRect)) return false;
-  return isPolicyVersions(m.policy);
+  if (!isPolicyVersions(m.policy)) return false;
+  // T099: the sanitize opt-in must be an explicit boolean — never absent,
+  // never truthy-by-accident.
+  return typeof m.sanitize === "boolean";
 }
 
 /** Narrow an unknown worker message to a valid outbound message. */

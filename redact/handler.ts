@@ -27,10 +27,15 @@ export interface TransformBackend {
    * Apply the approved redaction policy to the source bytes and return the
    * full-rewrite candidate plus the internal self-check outcome.
    * Must never resolve with an overlay-only or incremental result.
+   * @param sanitize T099: when true, strip document Info, XMP metadata,
+   * embedded files, and document-level scripts/actions after the
+   * redaction policy and before the save. The caller (host) is the only
+   * authority for this flag; the worker never enables it on its own.
    */
   apply(
     payload: ArrayBuffer,
     rects: readonly TransformRect[],
+    sanitize: boolean,
   ): Promise<{ bytes: ArrayBuffer; selfCheck: SelfCheckStatus }>;
 }
 
@@ -69,7 +74,7 @@ export async function dispatchTransform(
   const request = message as ApplyRedactionsMessage;
   let result: { bytes: ArrayBuffer; selfCheck: SelfCheckStatus };
   try {
-    result = await backend.apply(request.payload, request.rects);
+    result = await backend.apply(request.payload, request.rects, request.sanitize);
   } catch {
     // The raw error is swallowed deliberately: it may contain document
     // content (PR-003). The host learns only that the engine failed.

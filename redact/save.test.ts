@@ -87,7 +87,7 @@ describe("ported T012 — full rewrite with garbage collection", () => {
     const name = "text/en-basic.pdf";
     const input = fixtureBytes(name);
     const backend = createMuPdfBackend();
-    const { bytes, selfCheck } = await backend.apply(input, manifestRects(name));
+    const { bytes, selfCheck } = await backend.apply(input, manifestRects(name), false);
     expect(selfCheck).toBe("ok");
 
     // Single revision: no appended incremental update.

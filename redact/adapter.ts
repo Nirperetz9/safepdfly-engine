@@ -32,6 +32,7 @@ import type { TransformBackend } from "./handler.js";
 import type { TransformRect } from "./protocol.js";
 import { saveCandidate } from "./save.js";
 import { runSelfCheck } from "./selfcheck.js";
+import { sanitizeDocument } from "../sanitize/sanitize.js";
 import {
   ClipError,
   clipLineArtInStream,
@@ -293,12 +294,20 @@ function clipPageLineArt(page: PDFPage, rects: readonly TransformRect[]): void {
 /** Production backend: open, apply policy, full-rewrite save, self-check. */
 export function createMuPdfBackend(): TransformBackend {
   return {
-    async apply(payload: ArrayBuffer, rects: readonly TransformRect[]) {
+    async apply(payload: ArrayBuffer, rects: readonly TransformRect[], sanitize: boolean) {
       let doc: PDFDocument | null = null;
       try {
         doc = openPdfDocument(payload);
         const expectedPages = doc.countPages();
         applyRedactionPolicy(doc, rects);
+        if (sanitize) {
+          // T099 — opt-in hidden-layer strip, after the redaction policy
+          // and before the full-rewrite save, so the sanitized candidate
+          // is what the independent verifier checks. A SanitizeError
+          // (malformed metadata structures) propagates like any engine
+          // failure: no candidate, TRANSFORM_FAILED at the boundary.
+          sanitizeDocument(doc);
+        }
         const saved = saveCandidate(doc);
         const selfCheck = runSelfCheck(saved, expectedPages);
         return { bytes: saved, selfCheck };
