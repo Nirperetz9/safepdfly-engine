@@ -14,9 +14,8 @@
  *    no candidate — the application cannot downgrade to a cosmetic
  *    rectangle under any failure condition.
  *
- * Fixture note: like the T085 classifier tests, these read the Phase 1
- * fixture PDFs under prototypes/engine-validation/fixtures/ (read-only;
- * fixture ownership is still to be fixed deliberately).
+ * Fixture note (T074): the corpus lives at src/test/fixtures/ (committed,
+ * synthetic only); prototypes/ is never read anymore.
  */
 import { describe, expect, it } from "vitest";
 import { ColorSpace, Matrix, PDFDocument } from "mupdf";

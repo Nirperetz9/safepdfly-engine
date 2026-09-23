@@ -2,9 +2,10 @@
  * Shared test helpers for the redact path. Test-only; not imported by
  * product code.
  *
- * Fixture note (same as T085): these read the Phase 1 fixture PDFs under
- * prototypes/engine-validation/fixtures/ read-only. Fixture ownership is
- * still to be fixed deliberately.
+ * Fixture note (T074): the corpus lives at src/test/fixtures/ (committed,
+ * synthetic only). The Phase 1 prototype fixtures under
+ * prototypes/engine-validation/fixtures/ were copied there verbatim;
+ * prototypes/ is never read anymore.
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -12,15 +13,7 @@ import { fileURLToPath } from "node:url";
 import type { TransformRect } from "./protocol.js";
 
 export const redactDir = dirname(fileURLToPath(import.meta.url));
-export const fixturesDir = join(
-  redactDir,
-  "..",
-  "..",
-  "..",
-  "prototypes",
-  "engine-validation",
-  "fixtures",
-);
+export const fixturesDir = join(redactDir, "..", "..", "test", "fixtures");
 export const workersDir = join(redactDir, "..", "..", "app", "workers");
 
 interface ManifestEntry {

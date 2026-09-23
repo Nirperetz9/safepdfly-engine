@@ -21,7 +21,7 @@ const require = createRequire(import.meta.url);
 
 function fixture(name: string): ArrayBuffer {
   const url = require.resolve(
-    `../../../prototypes/engine-validation/fixtures/${name}`,
+    `../../test/fixtures/${name}`,
   );
   const buf = readFileSync(url);
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);

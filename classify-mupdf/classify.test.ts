@@ -22,7 +22,7 @@ const workersDir = join(here, "..", "..", "app", "workers");
 
 function fixture(name: string): ArrayBuffer {
   const url = new URL(
-    `../../../prototypes/engine-validation/fixtures/${name}`,
+    `../../test/fixtures/${name}`,
     import.meta.url,
   );
   const buf = readFileSync(url);

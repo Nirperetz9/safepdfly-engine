@@ -25,7 +25,7 @@ import {
 
 function fixture(name: string): ArrayBuffer {
   const url = new URL(
-    `../../../prototypes/engine-validation/fixtures/${name}`,
+    `../../test/fixtures/${name}`,
     import.meta.url,
   );
   const buf = readFileSync(url);

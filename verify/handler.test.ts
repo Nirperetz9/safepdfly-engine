@@ -113,7 +113,10 @@ describe("dispatchVerify (T064)", () => {
 
   it("fails closed on an unparseable candidate", async () => {
     const { engine } = fakeEngine({ candidateThrows: true });
-    const d = deps({ createEngine: () => engine });
+    const d = deps({
+      createEngine: () => engine,
+      sha256: async () => EXPECTED,
+    });
     const out = await dispatchVerify(message(), d);
     expect(out).toEqual({ type: "VERIFY_FAILED", reason: "parse-error" });
     expect(d.runChecks).not.toHaveBeenCalled();
@@ -178,11 +181,49 @@ describe("dispatchVerify (T064)", () => {
     expect(d.runChecks).not.toHaveBeenCalled();
   });
 
-  it("always closes both documents, even on digest mismatch", async () => {
-    const d = deps({ sha256: async () => "other" as Sha256Digest });
-    await dispatchVerify(message(), d);
-    // Candidate was opened before the digest check; it must still be closed.
-    expect(d.closed).toContain("candidate");
+  it("never opens the candidate on digest mismatch (gate runs first)", async () => {
+    const { engine } = fakeEngine();
+    const open = vi.fn(engine.open);
+    const d = deps({
+      createEngine: () => ({ ...engine, open }),
+      sha256: async () => "other" as Sha256Digest,
+    });
+    const out = await dispatchVerify(message(), d);
+    expect(out).toEqual({ type: "VERIFY_FAILED", reason: "digest-mismatch" });
+    // The FR-012 gate runs before engine.open (T074): a mismatched
+    // candidate is never opened, so there is nothing to close.
+    expect(open).not.toHaveBeenCalled();
+    expect(d.closed).toEqual([]);
+  });
+
+  it("passes the digest gate when the engine detaches the buffer on open (T074)", async () => {
+    // Real PDF.js transfers (detaches) the message's candidate buffer to
+    // its internal worker inside open(). The gate must still see the
+    // intact bytes, so it runs before the open.
+    const seen: number[] = [];
+    const neutering: VerifyEngine = {
+      name: "pdfjs",
+      version: "test",
+      open: async (data: Uint8Array) => {
+        seen.push(data.byteLength);
+        const buf = data.buffer as ArrayBuffer;
+        // Mirror PDF.js: neuter the caller's buffer via transfer.
+        const { port1, port2 } = new MessageChannel();
+        port1.postMessage(buf, [buf]);
+        port1.close();
+        port2.close();
+        return fakeDoc([], "candidate");
+      },
+    };
+    const d = deps({
+      createEngine: () => neutering,
+      sha256: async () => EXPECTED,
+    });
+    const out = await dispatchVerify(message(), d);
+    // Candidate (8 bytes) then source (4 bytes); both opens neuter the
+    // message buffers exactly like real PDF.js, after the gate already ran.
+    expect(seen).toEqual([8, 4]);
+    expect(out.type).toBe("VERIFY_RESULT");
   });
 
   it("closes both documents on the success path", async () => {

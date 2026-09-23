@@ -5,9 +5,12 @@
  *  1. Validate the inbound message (anything else → VERIFY_FAILED/protocol).
  *  2. Budget-gate the candidate bytes.
  *  3. Reopen the exact candidate bytes as a fresh PDF.js document.
- *  4. Recompute SHA-256 over the received bytes and match the expected
- *     digest BEFORE any check (FR-012). Mismatch is a deterministic
- *     integrity failure → "digest-mismatch" (fail), never an ambiguity.
+ *  4. The FR-012 digest gate runs BEFORE the open: the expected digest is
+ *     recomputed over the received bytes and matched first. This ordering
+ *     is load-bearing — PDF.js transfers (detaches) the message's
+ *     candidate buffer to its internal worker on open, so a digest
+ *     computed after the open would always run over zeroed bytes and
+ *     every real verification would fail closed as "digest-mismatch".
  *  5. Emit the "reopened" checkpoint, open the source, run the injected
  *     check runner (the real checks land in T065–T068), emit "checks-done".
  *  6. Return VERIFY_RESULT carrying the worker-computed digest and versions.
@@ -84,16 +87,20 @@ export async function dispatchVerify(
   let candidate: VerifyDoc | null = null;
   let source: VerifyDoc | null = null;
   try {
+    // FR-012 — the digest gate runs BEFORE the candidate is opened.
+    // engine.open hands the message's candidate buffer to PDF.js, which
+    // transfers (detaches) it to its internal worker; computing the
+    // digest after the open would hash zeroed bytes and fail every real
+    // verification as "digest-mismatch". Mismatch is a deterministic
+    // integrity failure → "digest-mismatch" (fail), never an ambiguity.
+    const actual = await sha256(data.candidateBytes);
+    if (actual !== data.expectedCandidateSha256) {
+      return failed("digest-mismatch");
+    }
     try {
       candidate = await engine.open(new Uint8Array(data.candidateBytes));
     } catch {
       return failed("parse-error");
-    }
-    // FR-012: match the digest of the exact bytes being checked before
-    // any check runs. Computed worker-side over the received bytes.
-    const actual = await sha256(data.candidateBytes);
-    if (actual !== data.expectedCandidateSha256) {
-      return failed("digest-mismatch");
     }
     emit("reopened");
     try {
