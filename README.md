@@ -39,7 +39,6 @@ client/protocol surfaces — never engine internals.
 
 ## Publication status
 
-The engine source **will be published at release**, as AGPL requires for
-network-distributed use. It is **not yet published** — this package is
-currently marked `"private": true` to prevent accidental publication
-before the release gate opens.
+This is the published engine source, released under AGPL-3.0-or-later —
+the license required for network-distributed use of the AGPL-licensed
+MuPDF core it builds on.
