@@ -9,21 +9,21 @@
 import type { VerifyCheckContext, VerifyCheckRunner } from "./handler.js";
 import { runDocumentChecks } from "./checks/document.js";
 import { runTextChecks } from "./checks/text.js";
+import { runVisualChecks } from "./checks/visual.js";
 
 export const runVerificationChecks: VerifyCheckRunner = async (
   ctx: VerifyCheckContext,
 ) => {
-  const [documentChecks, selectionChecks] = await Promise.all([
+  const [documentChecks, textChecks, visual] = await Promise.all([
     runDocumentChecks(ctx),
     runTextChecks(ctx),
+    runVisualChecks(ctx),
   ]);
   return {
     documentChecks,
-    selectionChecks,
-    // T067 — visible-content checks: uniform fill, no retained pixels,
-    // no outside-mask damage.
-    outsideMaskOutcome: "indeterminate",
-    outsideMaskReasonCode: "verify.visual.not-implemented",
+    selectionChecks: [...textChecks, ...visual.selectionChecks],
+    outsideMaskOutcome: visual.outsideMaskOutcome,
+    outsideMaskReasonCode: visual.outsideMaskReasonCode,
     // T068 — duplicate-occurrence warnings.
     warnings: [],
   };

@@ -90,11 +90,15 @@ export interface VerifyDocumentCheck {
   readonly reasonCode: string;
 }
 
+export type SelectionCheckAspect = "text" | "visual";
+
 export interface VerifySelectionCheck {
   readonly selectionId: string;
   /** 0-based page index of the marked rectangle. */
   readonly page: number;
   readonly number: number;
+  /** Which check produced this entry; T069 combines aspects per selection. */
+  readonly aspect: SelectionCheckAspect;
   readonly outcome: VerificationOutcome;
   readonly reasonCode: string;
 }

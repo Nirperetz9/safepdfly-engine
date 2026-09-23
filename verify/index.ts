@@ -19,6 +19,7 @@ export {
   type VerifyCheckpointMessage,
   type VerifyDocumentCheck,
   type VerifySelectionCheck,
+  type SelectionCheckAspect,
   type VerifyWarning,
   type VerifyWorkerResult,
   type VerifyResultMessage,
@@ -54,3 +55,15 @@ export { VERIFY_TIMEOUT_MS, createVerifyTimeoutMs } from "./timeouts.js";
 export { runVerificationChecks } from "./checks.js";
 export { runDocumentChecks } from "./checks/document.js";
 export { runTextChecks, textItemBox, hasVisibleText, boxesOverlap } from "./checks/text.js";
+export {
+  runVisualChecks,
+  toDeviceBox,
+  VISUAL_SCALE,
+  AA_BOUNDARY_PX,
+  FILL_UNIFORMITY_TOLERANCE,
+  FILL_BLACK_TOLERANCE,
+  RETAINED_TOLERANCE,
+  OUTSIDE_TOLERANCE,
+  GLYPH_EXCLUSION_MARGIN_PX,
+  type VisualCheckOutput,
+} from "./checks/visual.js";

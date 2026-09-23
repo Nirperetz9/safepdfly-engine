@@ -121,6 +121,7 @@ function indeterminateFor(
     selectionId: rect.selectionId,
     page: rect.page,
     number: rect.number,
+    aspect: "text" as const,
     outcome: "indeterminate" as const,
     reasonCode,
   }));
@@ -167,6 +168,7 @@ export async function runTextChecks(ctx: VerifyCheckContext): Promise<VerifySele
         selectionId: rect.selectionId,
         page: rect.page,
         number: rect.number,
+        aspect: "text",
         outcome: hit ? "fail" : "pass",
         reasonCode: hit ? CODES.remaining : CODES.clear,
       });
