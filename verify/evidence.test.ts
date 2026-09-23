@@ -82,7 +82,7 @@ describe("frozen versions and thresholds (T070)", () => {
       transformEngine: "mupdf/1.28.1",
       verifyEngine: "pdfjs/6.3.289",
       verifyPolicy: "verify-policy/1",
-      redactionPolicy: "redaction-policy/1",
+      redactionPolicy: "redaction-policy/2",
       savePolicy: "save/garbage+gc/1",
     });
   });

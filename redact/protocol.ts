@@ -17,9 +17,11 @@ import type { Sha256Digest } from "../geometry/index.js";
 
 /** Exact transformation engine pin (must match docs/governance/engine-pins.md). */
 export const TRANSFORM_ENGINE_VERSION = "mupdf/1.28.1" as const;
-/** Approved redaction policy: text removed, covered image pixels replaced,
- *  touched line art removed, opaque fill. Privacy over path preservation. */
-export const REDACTION_POLICY_VERSION = "redaction-policy/1" as const;
+/** Approved redaction policy (T094): text removed, covered image pixels
+ *  replaced, touched vector strokes clipped at the mark boundary (only the
+ *  marked portion of the geometry is removed), fills touched by a mark
+ *  removed whole, opaque fill. Privacy over path preservation. */
+export const REDACTION_POLICY_VERSION = "redaction-policy/2" as const;
 /** Save policy: full non-incremental rewrite with garbage collection. */
 export const SAVE_POLICY_VERSION = "save/garbage+gc/1" as const;
 

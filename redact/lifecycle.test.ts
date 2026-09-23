@@ -107,7 +107,7 @@ describe("T063 transform worker termination before verification", () => {
         sha256: "c".repeat(64),
         byteLength: 4,
         selfCheck: "ok",
-        versions: { engine: "mupdf/1.28.1", redaction: "redaction-policy/1", save: "save/garbage+gc/1" },
+        versions: { engine: "mupdf/1.28.1", redaction: "redaction-policy/2", save: "save/garbage+gc/1" },
       },
     });
     const candidate = await pending;
