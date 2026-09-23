@@ -83,6 +83,8 @@ export interface VerifyCheckpointMessage {
 
 export interface VerifyDocumentCheck {
   readonly check: string;
+  /** 0-based page index for per-page checks; omitted for document-wide ones. */
+  readonly page?: number;
   readonly outcome: VerificationOutcome;
   readonly reasonCode: string;
 }

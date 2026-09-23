@@ -33,7 +33,7 @@ function fakeDoc(closed: string[], tag: string): VerifyDoc {
     },
     jsActionNames: async () => [],
     attachmentNames: async () => [],
-    hasFieldObjects: async () => false,
+    fieldNames: async () => [],
     close: async () => {
       closed.push(tag);
     },

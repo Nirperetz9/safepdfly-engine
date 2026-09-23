@@ -60,8 +60,11 @@ export interface VerifyDoc {
   jsActionNames(): Promise<readonly string[]>;
   /** Names of embedded file attachments (must be empty). */
   attachmentNames(): Promise<readonly string[]>;
-  /** True when any AcroForm field objects exist (must be false). */
-  hasFieldObjects(): Promise<boolean>;
+  /**
+   * Fully-qualified names of every AcroForm field, flattened recursively
+   * (a nested field introduced under an existing parent still counts).
+   */
+  fieldNames(): Promise<readonly string[]>;
   close(): Promise<void>;
 }
 
@@ -168,9 +171,21 @@ class PdfJsVerifyDoc implements VerifyDoc {
     return attachments === null ? [] : [...attachments.keys()];
   }
 
-  async hasFieldObjects(): Promise<boolean> {
+  async fieldNames(): Promise<readonly string[]> {
     const fields = await this.doc.getFieldObjects();
-    return fields !== null && fields.size > 0;
+    if (fields === null) return [];
+    const names: string[] = [];
+    const walk = (node: unknown, prefix: string): void => {
+      if (!(node instanceof Map)) return;
+      for (const [key, value] of node) {
+        const name = prefix === "" ? String(key) : `${prefix}.${String(key)}`;
+        names.push(name);
+        const kids = (value as { kids?: unknown } | null)?.kids;
+        walk(kids, name);
+      }
+    };
+    walk(fields, "");
+    return names;
   }
 
   async close(): Promise<void> {

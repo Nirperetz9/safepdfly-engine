@@ -1,14 +1,27 @@
 /**
- * T064 placeholder — the real verification checks land in T065–T068
- * (document, text, visible-content, and duplicate-occurrence checks).
+ * T064 — Verification check composition (worker side).
  *
- * Until then this runner fails closed: it throws, and the handler maps a
- * throwing runner to VERIFY_FAILED/internal (ambiguity → indeterminate at
- * the report level), so no candidate can ever verify through this path.
- * T065–T068 will replace the body, not the interface.
+ * T065 wires in the document checks. T066 (text), T067 (visible content),
+ * and T068 (duplicate-occurrence warning) land next; until they do, the
+ * unimplemented parts stay honestly indeterminate — never a silent pass —
+ * so no candidate can verify through this path yet.
  */
-import type { VerifyCheckRunner } from "./handler.js";
+import type { VerifyCheckContext, VerifyCheckRunner } from "./handler.js";
+import { runDocumentChecks } from "./checks/document.js";
 
-export const runVerificationChecks: VerifyCheckRunner = async () => {
-  throw new Error("verify: checks T065-T068 not yet implemented");
+export const runVerificationChecks: VerifyCheckRunner = async (
+  ctx: VerifyCheckContext,
+) => {
+  const documentChecks = await runDocumentChecks(ctx);
+  return {
+    documentChecks,
+    // T066 — text checks: no non-whitespace/selectable text in marked rects.
+    selectionChecks: [],
+    // T067 — visible-content checks: uniform fill, no retained pixels,
+    // no outside-mask damage.
+    outsideMaskOutcome: "indeterminate",
+    outsideMaskReasonCode: "verify.visual.not-implemented",
+    // T068 — duplicate-occurrence warnings.
+    warnings: [],
+  };
 };
