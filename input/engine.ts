@@ -8,6 +8,7 @@
  * origin only, never a CDN.
  */
 import type * as pdfjsTypes from "pdfjs-dist/legacy/build/pdf.mjs";
+import type { PiiTextItem } from "../pii/index.js";
 
 export type PdfJsModule = typeof pdfjsTypes;
 
@@ -19,6 +20,12 @@ export interface InputEnginePage {
   readonly view: readonly [number, number, number, number];
   /** True when any non-whitespace text item exists on the page. */
   hasNonWhitespaceText(): Promise<boolean>;
+  /**
+   * T097 — Raw text items in default user space (y-up) for the PII
+   * finder. Runs in the render worker; matched values never cross to the
+   * host — the worker returns candidate geometry only.
+   */
+  textItems(): Promise<readonly PiiTextItem[]>;
   /**
    * T040 — Number of content-stream operators on the page, for the
    * per-page operator budget guard. A full parse; the worker time budget
@@ -53,6 +60,21 @@ export interface InputEngine {
   open(data: Uint8Array): Promise<InputEngineDoc>;
 }
 
+function toMatrix6(
+  value: unknown,
+): [number, number, number, number, number, number] | null {
+  if (!Array.isArray(value) || value.length !== 6) return null;
+  const [a, b, c, d, e, f] = value;
+  return typeof a === "number" &&
+    typeof b === "number" &&
+    typeof c === "number" &&
+    typeof d === "number" &&
+    typeof e === "number" &&
+    typeof f === "number"
+    ? [a, b, c, d, e, f]
+    : null;
+}
+
 class PdfJsEnginePage implements InputEnginePage {
   constructor(private readonly page: pdfjsTypes.PDFPageProxy) {}
 
@@ -82,6 +104,23 @@ class PdfJsEnginePage implements InputEnginePage {
   async countOperators(): Promise<number> {
     const ops = await this.page.getOperatorList();
     return ops.fnArray.length;
+  }
+
+  async textItems(): Promise<readonly PiiTextItem[]> {
+    const content = await this.page.getTextContent();
+    const items: PiiTextItem[] = [];
+    for (const raw of content.items) {
+      if (!("str" in raw) || typeof raw.str !== "string") continue;
+      const matrix = toMatrix6((raw as { transform?: unknown }).transform);
+      if (matrix === null) continue;
+      items.push({
+        str: raw.str,
+        transform: matrix,
+        width: typeof raw.width === "number" ? raw.width : 0,
+        hasEOL: (raw as { hasEOL?: unknown }).hasEOL === true,
+      });
+    }
+    return items;
   }
 }
 

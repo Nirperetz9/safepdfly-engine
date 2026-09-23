@@ -7,11 +7,14 @@
  */
 import { describe, expect, it, vi } from "vitest";
 import {
+  PiiScanError,
+  PiiScanSupersededError,
   RenderSupersededError,
   RenderWorkerClient,
   type MinimalRenderWorker,
   type RenderedPage,
 } from "./render-client.js";
+import type { PiiWorkerCandidate } from "./render.js";
 import type { RenderWorkerResponse } from "./render.js";
 
 interface PostedMessage {
@@ -58,6 +61,25 @@ class FakeWorker implements MinimalRenderWorker {
   emitFailed(requestId: number): void {
     this.onmessage?.({
       data: { type: "RENDER_FAILED", requestId, code: "render_failed" } satisfies RenderWorkerResponse,
+    });
+  }
+
+  /** Deliver a PII_PAGE_FOUND for the given request id. */
+  emitPiiFound(requestId: number, candidates: PiiWorkerCandidate[]): void {
+    this.onmessage?.({
+      data: {
+        type: "PII_PAGE_FOUND",
+        requestId,
+        pageIndex: 1,
+        candidates,
+      } satisfies RenderWorkerResponse,
+    });
+  }
+
+  /** Deliver a PII_PAGE_FAILED for the given request id. */
+  emitPiiFailed(requestId: number, code: "no_text_layer" | "extraction_failed"): void {
+    this.onmessage?.({
+      data: { type: "PII_PAGE_FAILED", requestId, code } satisfies RenderWorkerResponse,
     });
   }
 
@@ -121,5 +143,63 @@ describe("RenderWorkerClient", () => {
     client.close(); // idempotent
     expect(worker.terminated).toBe(true);
     await expect(client.renderPage(0, 2, 1_000_000)).rejects.toThrow("not open");
+  });
+});
+
+describe("RenderWorkerClient.findPiiPage (T097)", () => {
+  const CANDIDATES: PiiWorkerCandidate[] = [
+    { kind: "id-number", x0: 76, y0: 690, x1: 130, y1: 710 },
+  ];
+
+  it("resolves candidate geometry for a page scan", async () => {
+    const worker = new FakeWorker();
+    const client = new RenderWorkerClient(() => worker);
+    await client.open(new ArrayBuffer(8));
+    const p = client.findPiiPage(0, ["id-number"]);
+    const posted = worker.posted[worker.posted.length - 1]!.message as {
+      type: string;
+      pageIndex: number;
+      kinds: string[];
+    };
+    expect(posted.type).toBe("FIND_PII_PAGE");
+    expect(posted.pageIndex).toBe(1); // worker uses 1-based pages
+    expect(posted.kinds).toEqual(["id-number"]);
+    worker.emitPiiFound(1, CANDIDATES);
+    await expect(p).resolves.toEqual(CANDIDATES);
+    client.close();
+  });
+
+  it("rejects with PiiScanError carrying the worker failure code", async () => {
+    const worker = new FakeWorker();
+    const client = new RenderWorkerClient(() => worker);
+    await client.open(new ArrayBuffer(8));
+    const p = client.findPiiPage(0, ["phone-il"]);
+    worker.emitPiiFailed(1, "no_text_layer");
+    const error = await p.catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(PiiScanError);
+    expect((error as PiiScanError).code).toBe("no_text_layer");
+    client.close();
+  });
+
+  it("supersedes an older scan when a new one starts", async () => {
+    const worker = new FakeWorker();
+    const client = new RenderWorkerClient(() => worker);
+    await client.open(new ArrayBuffer(8));
+    const p1 = client.findPiiPage(0, ["id-number"]);
+    const p2 = client.findPiiPage(1, ["id-number"]);
+    worker.emitPiiFound(1, CANDIDATES); // stale
+    worker.emitPiiFound(2, []);
+    await expect(p1).rejects.toBeInstanceOf(PiiScanSupersededError);
+    await expect(p2).resolves.toEqual([]);
+    client.close();
+  });
+
+  it("rejects scans when the client is not open", async () => {
+    const worker = new FakeWorker();
+    const client = new RenderWorkerClient(() => worker);
+    await expect(client.findPiiPage(0, ["id-number"])).rejects.toThrow("not open");
+    await client.open(new ArrayBuffer(8));
+    client.close();
+    await expect(client.findPiiPage(0, ["id-number"])).rejects.toThrow("not open");
   });
 });

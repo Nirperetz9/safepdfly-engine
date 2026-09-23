@@ -12,6 +12,9 @@
  */
 import {
   RENDER_POLICY_VERSION,
+  type PiiFailureCode,
+  type PiiKind,
+  type PiiWorkerCandidate,
   type RenderWorkerRequest,
   type RenderWorkerResponse,
 } from "./render.js";
@@ -37,15 +40,45 @@ export class RenderSupersededError extends Error {
   }
 }
 
+/**
+ * T097 — the worker refused or failed the PII scan. The `code` is the
+ * stable worker failure code (`no_text_layer`, `extraction_failed`, …);
+ * callers surface a plain-language message, never the code alone.
+ */
+export class PiiScanError extends Error {
+  readonly code: PiiFailureCode;
+  constructor(code: PiiFailureCode) {
+    super(`pii scan failed: ${code}`);
+    this.name = "PiiScanError";
+    this.code = code;
+  }
+}
+
+export class PiiScanSupersededError extends Error {
+  constructor() {
+    super("pii scan superseded by a newer scan");
+    this.name = "PiiScanSupersededError";
+  }
+}
+
 interface PendingRender {
   readonly resolve: (page: RenderedPage) => void;
   readonly reject: (error: Error) => void;
 }
 
+interface PendingPiiScan {
+  readonly resolve: (candidates: readonly PiiWorkerCandidate[]) => void;
+  readonly reject: (error: Error) => void;
+}
+
+/** Per-page PII scan timeout: extraction + matching must not hang the UI. */
+const PII_SCAN_TIMEOUT_MS = 30_000;
+
 export class RenderWorkerClient {
   private worker: MinimalRenderWorker | null = null;
   private nextRequestId = 1;
   private pending: { requestId: number; pending: PendingRender } | null = null;
+  private piiPending: { requestId: number; pending: PendingPiiScan } | null = null;
   private opened = false;
   private closed = false;
 
@@ -119,6 +152,7 @@ export class RenderWorkerClient {
     if (this.closed) return;
     this.closed = true;
     this.failPending(new Error("render client closed"));
+    this.failPiiPending(new Error("render client closed"));
     const worker = this.worker;
     this.worker = null;
     this.pending = null;
@@ -136,6 +170,58 @@ export class RenderWorkerClient {
     const current = this.pending;
     this.pending = null;
     current?.pending.reject(error);
+  }
+
+  private failPiiPending(error: Error): void {
+    const current = this.piiPending;
+    this.piiPending = null;
+    current?.pending.reject(error);
+  }
+
+  /**
+   * T097 — scan one page's text layer for the given PII kinds.
+   * `pageIndex` is 0-based (UI convention); the worker uses 1-based page
+   * numbers. Resolves with candidate geometry only — matched text values
+   * never cross the worker boundary. Only the latest scan's promise
+   * settles; an earlier one rejects with PiiScanSupersededError. Rejects
+   * with PiiScanError carrying the worker's stable failure code
+   * (`no_text_layer`, `extraction_failed`, …) on a failed scan.
+   */
+  findPiiPage(
+    pageIndex: number,
+    kinds: readonly PiiKind[],
+  ): Promise<readonly PiiWorkerCandidate[]> {
+    if (!this.opened || this.closed || this.worker === null) {
+      return Promise.reject(new Error("render client is not open"));
+    }
+    // Supersede any in-flight scan.
+    this.failPiiPending(new PiiScanSupersededError());
+    const requestId = this.nextRequestId++;
+    const promise = new Promise<readonly PiiWorkerCandidate[]>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.failPiiPending(new Error("pii scan timed out"));
+      }, PII_SCAN_TIMEOUT_MS);
+      this.piiPending = {
+        requestId,
+        pending: {
+          resolve: (candidates) => {
+            clearTimeout(timer);
+            resolve(candidates);
+          },
+          reject: (error) => {
+            clearTimeout(timer);
+            reject(error);
+          },
+        },
+      };
+    });
+    this.worker.postMessage({
+      type: "FIND_PII_PAGE",
+      requestId,
+      pageIndex: pageIndex + 1,
+      kinds,
+    } satisfies RenderWorkerRequest);
+    return promise;
   }
 
   private onMessage(response: RenderWorkerResponse): void {
@@ -169,6 +255,23 @@ export class RenderWorkerClient {
           height: response.height,
           scale: response.scale,
         });
+        return;
+      }
+      case "PII_PAGE_FOUND": {
+        const current = this.piiPending;
+        if (current === null || current.requestId !== response.requestId) {
+          // Stale scan: drop it; candidates belong to a superseded scan.
+          return;
+        }
+        this.piiPending = null;
+        current.pending.resolve(response.candidates);
+        return;
+      }
+      case "PII_PAGE_FAILED": {
+        const current = this.piiPending;
+        if (current === null || current.requestId !== response.requestId) return;
+        this.piiPending = null;
+        current.pending.reject(new PiiScanError(response.code));
         return;
       }
     }

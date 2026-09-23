@@ -26,12 +26,15 @@ export {
   MAX_RENDER_SCALE,
   MIN_RENDER_SCALE,
   RENDER_POLICY_VERSION,
+  type PiiFailureCode,
   type RenderFailureCode,
   type RenderHandlerDeps,
   type RenderWorkerRequest,
   type RenderWorkerResponse,
 } from "./render.js";
 export {
+  PiiScanError,
+  PiiScanSupersededError,
   RenderSupersededError,
   RenderWorkerClient,
   type MinimalRenderWorker,

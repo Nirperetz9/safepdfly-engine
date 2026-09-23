@@ -45,6 +45,7 @@ function stubPage(opts: StubPageOpts = {}): InputEnginePage {
     userUnit: opts.userUnit ?? 1,
     view: opts.view ?? [0, 0, 595, 842],
     hasNonWhitespaceText: async () => false,
+    textItems: async () => [],
     countOperators: async () => opts.operators ?? 10,
   };
 }

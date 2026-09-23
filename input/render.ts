@@ -11,9 +11,19 @@
  * extracted text never cross the boundary.
  */
 import type { InputEngine, InputEngineDoc, PageRender } from "./engine.js";
+import {
+  findPiiCandidates,
+  hasVisiblePiiText,
+  isPiiKind,
+  type PiiKind,
+  type PiiTextItem,
+  type PiiWorkerCandidate,
+} from "../pii/index.js";
+
+export type { PiiKind, PiiWorkerCandidate };
 
 /** Bump when the render wire format changes. */
-export const RENDER_POLICY_VERSION = 1;
+export const RENDER_POLICY_VERSION = 2;
 
 export type RenderWorkerRequest =
   | { readonly type: "OPEN_RENDERER"; readonly policyVersion: number }
@@ -27,9 +37,36 @@ export type RenderWorkerRequest =
       /** Upper bound on rendered pixels (from the page descriptor budget). */
       readonly maxPixels: number;
     }
+  | {
+      /**
+       * T097 — run the PII finder over one page's text layer. Matching
+       * happens in the worker; the response carries candidate geometry
+       * only, never matched text values.
+       */
+      readonly type: "FIND_PII_PAGE";
+      readonly requestId: number;
+      /** 1-based page number. */
+      readonly pageIndex: number;
+      /** Non-empty subset of the five approved preset kinds. */
+      readonly kinds: readonly PiiKind[];
+    }
   | { readonly type: "CLOSE_RENDERER" };
 
 export type RenderFailureCode = "invalid_request" | "render_failed" | "closed" | "not_open";
+
+/**
+ * T097 — fail-closed codes for the PII scan. `no_text_layer` means the
+ * page has no usable text to search (extraction succeeded but found
+ * nothing readable) — the UI must say so plainly, never silently skip the
+ * page.
+ */
+export type PiiFailureCode =
+  | "not_open"
+  | "closed"
+  | "invalid_request"
+  | "invalid_kinds"
+  | "extraction_failed"
+  | "no_text_layer";
 
 export type RenderWorkerResponse =
   | { readonly type: "RENDERER_OPENED" }
@@ -43,6 +80,15 @@ export type RenderWorkerResponse =
       readonly bitmap: ImageBitmap;
     }
   | { readonly type: "RENDER_FAILED"; readonly requestId?: number; readonly code: RenderFailureCode }
+  | {
+      readonly type: "PII_PAGE_FOUND";
+      readonly requestId: number;
+      /** 1-based page number, echoed from the request. */
+      readonly pageIndex: number;
+      /** Candidate geometry in default user space (y-up); no text values. */
+      readonly candidates: readonly PiiWorkerCandidate[];
+    }
+  | { readonly type: "PII_PAGE_FAILED"; readonly requestId: number; readonly code: PiiFailureCode }
   | { readonly type: "RENDERER_CLOSED" };
 
 export interface RenderHandlerDeps {
@@ -66,6 +112,10 @@ export function createRenderHandler(deps: RenderHandlerDeps) {
     return requestId === undefined
       ? { type: "RENDER_FAILED", code }
       : { type: "RENDER_FAILED", requestId, code };
+  }
+
+  function piiFailed(requestId: number, code: PiiFailureCode): RenderWorkerResponse {
+    return { type: "PII_PAGE_FAILED", requestId, code };
   }
 
   return {
@@ -127,6 +177,46 @@ export function createRenderHandler(deps: RenderHandlerDeps) {
             scale,
             bitmap: rendered.bitmap,
           };
+        }
+        case "FIND_PII_PAGE": {
+          const { requestId, pageIndex, kinds } = message;
+          if (doc === null || closed) {
+            return piiFailed(requestId, closed ? "closed" : "not_open");
+          }
+          if (
+            !Number.isInteger(requestId) ||
+            !Number.isInteger(pageIndex) ||
+            pageIndex < 1 ||
+            pageIndex > doc.numPages
+          ) {
+            return piiFailed(
+              Number.isInteger(requestId) ? requestId : 0,
+              "invalid_request",
+            );
+          }
+          if (!Array.isArray(kinds) || kinds.length === 0 || !kinds.every(isPiiKind)) {
+            return piiFailed(requestId, "invalid_kinds");
+          }
+          let items: readonly PiiTextItem[];
+          try {
+            const page = await doc.page(pageIndex);
+            items = await page.textItems();
+          } catch {
+            return piiFailed(requestId, "extraction_failed");
+          }
+          if (!items.some((item) => hasVisiblePiiText(item.str))) {
+            // Fail closed: no usable text layer to search. The UI reports
+            // the page plainly instead of silently skipping it.
+            return piiFailed(requestId, "no_text_layer");
+          }
+          const candidates = findPiiCandidates(items, kinds).map((match) => ({
+            kind: match.kind,
+            x0: match.box.x0,
+            y0: match.box.y0,
+            x1: match.box.x1,
+            y1: match.box.y1,
+          }));
+          return { type: "PII_PAGE_FOUND", requestId, pageIndex, candidates };
         }
         case "CLOSE_RENDERER": {
           closed = true;
