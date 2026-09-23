@@ -68,6 +68,9 @@ function stubEngine(pageCount: number, pageOpts: StubPageOpts = {}): StubEngine 
           pagesRequested++;
           return stubPage(pageOpts);
         },
+        renderPage: async () => {
+          throw new Error("renderPage not stubbed");
+        },
         destroy: async () => {},
       };
     },

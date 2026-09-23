@@ -202,6 +202,9 @@ describe("engine hardening options", () => {
         seen.push(opts);
         return {
           promise: Promise.resolve(fakeDoc),
+          renderPage: async () => {
+            throw new Error("renderPage not stubbed");
+          },
           destroy: async () => undefined,
         };
       },

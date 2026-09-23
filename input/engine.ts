@@ -27,9 +27,23 @@ export interface InputEnginePage {
   countOperators(): Promise<number>;
 }
 
+/** A rendered page bitmap produced inside the render worker. */
+export interface PageRender {
+  /** Transferred bitmap; the receiver owns it and must close it. */
+  readonly bitmap: ImageBitmap;
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface InputEngineDoc {
   readonly numPages: number;
   page(n: number): Promise<InputEnginePage>;
+  /**
+   * T041 — Render page `n` (1-based) at the given scale (device px per
+   * point) into an OffscreenCanvas and transfer the bitmap. Runs in the
+   * render worker; `scale` is validated by the render protocol handler.
+   */
+  renderPage(n: number, scale: number): Promise<PageRender>;
   destroy(): Promise<void>;
 }
 
@@ -83,6 +97,30 @@ class PdfJsEngineDoc implements InputEngineDoc {
 
   async page(n: number): Promise<InputEnginePage> {
     return new PdfJsEnginePage(await this.doc.getPage(n));
+  }
+
+  async renderPage(n: number, scale: number): Promise<PageRender> {
+    const page = await this.doc.getPage(n);
+    try {
+      const viewport = page.getViewport({ scale });
+      const width = Math.max(1, Math.ceil(viewport.width));
+      const height = Math.max(1, Math.ceil(viewport.height));
+      const canvas = new OffscreenCanvas(width, height);
+      const ctx = canvas.getContext("2d", { alpha: false });
+      if (ctx === null) throw new Error("2d context unavailable");
+      // pdf.js accepts an OffscreenCanvas 2d context at runtime; the DOM
+      // lib types only know the on-screen context, hence the cast. When the
+      // context is supplied, `canvas` must be null (backwards-compat path).
+      await page.render({
+        canvas: null,
+        canvasContext: ctx as unknown as CanvasRenderingContext2D,
+        viewport,
+      }).promise;
+      return { bitmap: canvas.transferToImageBitmap(), width, height };
+    } finally {
+      // Release page resources promptly: one active page render at a time.
+      page.cleanup();
+    }
   }
 
   async destroy(): Promise<void> {
