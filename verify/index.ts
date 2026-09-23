@@ -67,6 +67,12 @@ export {
   type AssemblerSelection,
 } from "./assembler.js";
 export {
+  canonicalJson,
+  canonicalReportBytes,
+  EVIDENCE_VERSIONS,
+  VERIFY_VISUAL_THRESHOLDS,
+} from "./evidence.js";
+export {
   runVisualChecks,
   toDeviceBox,
   VISUAL_SCALE,
